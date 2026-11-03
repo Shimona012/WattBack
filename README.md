@@ -1,6 +1,7 @@
 # WattBack
 
-### Your electricity bill has a story. Let's make it readable.
+### Every electricity bill has a story, you just have to find a way to read it.###
+### Find out, your bill's story.###
 
 A bill tells you what you owe. It is much less generous with the *why*: how many units that money bought, whether a tariff slab made the last few units more expensive, or whether your home uses more electricity than you'd expect for its size.
 
