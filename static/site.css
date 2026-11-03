@@ -1,0 +1,16 @@
+:root{--bg:#f1f5f7;--ink:#10283b;--mut:#5b7183;--acc:#0b7a68;--warn:#c4410c;--card:#fff;--line:#d5e0e6}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1a24;--ink:#e6eef3;--mut:#8fa5b5;--acc:#3ec9ae;--warn:#ff8a5c;--card:#15262f;--line:#26404f}}
+nav.site{position:sticky;top:0;z-index:20;justify-self:stretch;width:100%;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;padding:.6rem 1rem;background:var(--card);border-bottom:1px solid var(--line);font:15px system-ui,sans-serif;margin:-2rem -1rem 1.5rem;width:calc(100% + 2rem)}
+nav.site a{color:var(--ink);text-decoration:none}.brand{font-weight:700;color:var(--acc)!important}
+#mn{display:flex;gap:1rem;align-items:center;flex-wrap:wrap}#mb{display:none;background:transparent;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:.3rem .7rem;font:inherit;grid-column:auto}
+@media(max-width:700px){#mb{display:block}#mn{display:none;width:100%;flex-direction:column;align-items:flex-start}#mn.open{display:flex}}
+nav.site button.lnk{background:none;border:0;color:var(--acc);font:inherit;cursor:pointer;padding:0;grid-column:auto}
+#chatbtn{position:fixed;right:1rem;bottom:1rem;z-index:30;background:var(--acc);color:#fff;border:0;border-radius:999px;padding:.7rem 1.1rem;font:600 15px system-ui,sans-serif;cursor:pointer}
+#chat{position:fixed;right:1rem;bottom:4rem;z-index:30;width:min(340px,calc(100% - 2rem));max-height:60vh;display:none;flex-direction:column;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:12px;font:15px system-ui,sans-serif}
+#chat.open{display:flex}#cl{overflow:auto;padding:.7rem;display:grid;gap:.5rem}#cl p{margin:0;padding:.5rem .7rem;border-radius:10px;background:var(--bg)}#cl p.me{background:var(--acc);color:#fff;justify-self:end}
+#chat form{display:flex;gap:.4rem;padding:.5rem;border-top:1px solid var(--line)}#chat input{flex:1;font:inherit;padding:.5rem;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--ink)}
+#chat button{font:inherit;padding:.5rem .8rem;border:0;border-radius:8px;background:var(--acc);color:#fff}
+dialog#ins{border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);max-width:460px;font:15px/1.5 system-ui,sans-serif}
+dialog#ins button{font:inherit;padding:.5rem .8rem;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--ink);margin-right:.5rem}
+.page{width:min(680px,100%);font:16px/1.6 system-ui,sans-serif;color:var(--ink)}.page h1{letter-spacing:-.02em}.page input,.page textarea{width:100%;font:inherit;padding:.6rem;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--ink);margin:.25rem 0 .75rem}
+.page button{font:600 16px system-ui;padding:.7rem 1.2rem;border:0;border-radius:8px;background:var(--acc);color:#fff;cursor:pointer}

@@ -1,0 +1,16 @@
+{
+ "GJ": {
+  "state": "Gujarat", "regulator": "GERC", "utilities": ["UGVCL", "DGVCL", "MGVCL", "PGVCL", "Torrent Power"],
+  "effective": "2026-04-01", "status": "partial",
+  "customer": "RGP urban, single phase up to 6 kW",
+  "slabs": [[50, 3.05], [100, 3.50], [250, 4.15], [null, 5.20]],
+  "slabs_rural": [[50, 2.65], [100, 3.10], [250, 3.75], [null, 4.90]],
+  "telescopic": true,
+  "fixed_charge": 25.0, "fixed_bands_by_kw": {"<=2": 15, "2-4": 25, "4-6": 45, ">6": 70},
+  "duty": 0.15, "fppa_per_kwh": 3.00, "billing_days": 30,
+  "lat": 23.22, "lon": 72.65,
+  "verified": ["energy slabs (GERC schedule snippet confirms above-250 at 520 paise; four utility calculators agree on all four)"],
+  "unverified": ["fixed charge bands (secondary sites only)", "electricity duty (sources say 15%, 10% and 7.5%)", "FPPPA (changes every quarter, 3.00 is a placeholder)"],
+  "source": "https://gercin.org  (tariff schedule FY 2026-27)"
+ }
+}

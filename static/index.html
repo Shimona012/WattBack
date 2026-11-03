@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WattBack</title>
+<style>
+:root{--bg:#f1f5f7;--ink:#10283b;--mut:#5b7183;--acc:#0b7a68;--warn:#c4410c;--card:#fff;--line:#d5e0e6}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1a24;--ink:#e6eef3;--mut:#8fa5b5;--acc:#3ec9ae;--warn:#ff8a5c;--card:#15262f;--line:#26404f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,sans-serif;display:grid;place-items:start center;min-height:100vh;padding:2rem 1rem}
+main{width:min(560px,100%)}
+h1{font-size:2rem;margin:0 0 .25rem;letter-spacing:-.02em}
+p.sub{color:var(--mut);margin:0 0 1.5rem}
+form{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;background:var(--card);padding:1rem;border:1px solid var(--line);border-radius:12px}
+label{display:grid;gap:.25rem;font-size:.9rem;color:var(--mut)}
+input,select{font:inherit;padding:.6rem;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--ink)}
+select option{color:#10283b}
+button{grid-column:1/-1;font:inherit;font-weight:600;padding:.7rem;border:0;border-radius:8px;background:var(--acc);color:#fff;cursor:pointer}
+.ghost{background:transparent;color:var(--acc);border:1px solid var(--acc)}
+summary{cursor:pointer;color:var(--acc)}
+button:focus-visible,input:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+#out{margin-top:1.5rem;display:grid;gap:1rem}
+.big{font-size:3rem;font-weight:700;letter-spacing:-.03em;line-height:1}
+.row{display:flex;justify-content:space-between;gap:1rem;padding:.5rem 0;border-bottom:1px solid var(--line)}
+.bar{display:flex;height:14px;border-radius:7px;overflow:hidden;background:var(--line)}
+.bar i{display:block}
+h2{font-size:1.1rem;margin:1.25rem 0 .25rem}
+.sc{position:relative;width:320px;max-width:100%;height:110px;border-radius:10px;overflow:hidden;background:var(--card);border:1px solid var(--line)}
+.prize{position:absolute;inset:0;display:grid;place-items:center;font-weight:700;font-size:1.3rem;color:var(--acc)}
+#cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;transition:opacity .4s}
+.warn{color:var(--warn);font-weight:600}.good{color:var(--acc);font-weight:600}
+</style></head><body><main>
+<h1>WattBack</h1>
+<p class="sub">Enter your bill amount. We work out the units, the slab trap, and how you compare for a home your size.</p>
+<form id="f">
+  <label>Bill amount (₹)<input name="bill" type="number" min="1" value="2480"></label>
+  <label style="grid-column:1/-1">Consumer ID (optional, verifies your bill and unlocks real rewards)<input name="cid" inputmode="numeric" pattern="\d{10}" placeholder="10 digits"></label>
+  <label>PIN code<input name="pin" pattern="\d{6}" value="382010" required></label>
+  <label>People in the home<input name="n" type="number" min="1" max="15" value="4" required></label>
+  <label>State<select name="state" id="st"><option value="">Auto from PIN</option></select></label>
+  <button type="button" class="ghost" id="loc">Use my location</button>
+  <small id="locmsg" style="grid-column:1/-1;color:var(--mut)"></small>
+  <details style="grid-column:1/-1"><summary>My state isn't listed, or the rates look wrong: use my own rates</summary>
+    <div style="display:grid;gap:.5rem;margin-top:.5rem">
+      <label>Slabs from your bill (units@rate, last one "above")<input id="c_sl" placeholder="50@3.05, 100@3.50, 250@4.15, above@5.20"></label>
+      <label>Fixed charge per month (₹)<input id="c_fx" type="number" step="any" value="0"></label>
+      <label>Electricity duty (%)<input id="c_du" type="number" step="any" value="0"></label>
+      <label>Fuel surcharge (₹ per unit)<input id="c_fp" type="number" step="any" value="0"></label>
+      <label style="display:flex;gap:.5rem;align-items:center"><input id="c_te" type="checkbox" checked> Each slab applies only to the units inside it (most states)</label>
+      <label style="display:flex;gap:.5rem;align-items:center"><input id="c_sh" type="checkbox"> Share these rates to help other households (no personal details)</label>
+      <label style="display:flex;gap:.5rem;align-items:center"><input id="c_on" type="checkbox"> Use my rates for this check</label>
+    </div></details>
+  <label>Bill covers<select name="days"><option value="1">1 month</option><option value="2">2 months</option></select></label>
+  <label>Language<select name="lang"><option value="en">English</option><option value="hi">हिंदी</option><option value="gu">ગુજરાતી</option></select></label>
+  <label style="grid-column:1/-1;display:flex;gap:.5rem;align-items:center"><input type="checkbox" name="renter"> I rent, no roof access</label>
+  <button>Check my bill</button>
+</form>
+<section id="out" aria-live="polite"></section>
+<script>
+const $=s=>document.querySelector(s);
+fetch('/tariffs/states').then(r=>r.json()).then(L=>{$('#st').innerHTML+=L.map(x=>`<option value="${x.code}">${x.name}${x.loaded?'':' (rates not loaded)'}</option>`).join('')});
+try{const c=JSON.parse(localStorage.getItem('wb_custom')||'null');if(c){$('#c_sl').value=c.sl;$('#c_fx').value=c.fx;$('#c_du').value=c.du;$('#c_fp').value=c.fp;$('#c_te').checked=c.te}}catch{}
+function customRates(){
+  if(!$('#c_on').checked)return null;
+  const parts=$('#c_sl').value.split(',').map(x=>x.trim()).filter(Boolean);
+  const slabs=parts.map(p=>{const[u,r]=p.split('@').map(x=>x.trim());return[/^above$/i.test(u)?null:+u,+r]});
+  if(!slabs.length||slabs.some(([u,r])=>(u!==null&&!(u>0))||!(r>=0)))throw new Error('Check the slab format, like 50@3.05, 100@3.50, above@5.20');
+  try{localStorage.setItem('wb_custom',JSON.stringify({sl:$('#c_sl').value,fx:$('#c_fx').value,du:$('#c_du').value,fp:$('#c_fp').value,te:$('#c_te').checked}))}catch{}
+  return{slabs,fixed_charge:+$('#c_fx').value,duty:+$('#c_du').value/100,fppa_per_kwh:+$('#c_fp').value,telescopic:$('#c_te').checked}}
+$('#loc').onclick=()=>{
+  const m=t=>$('#locmsg').textContent=t;
+  if(!navigator.geolocation)return m('This browser has no location support. Pick your state instead.');
+  m('Finding you...');
+  navigator.geolocation.getCurrentPosition(async p=>{
+    window.COORDS=[p.coords.latitude,p.coords.longitude];
+    try{const j=await(await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${p.coords.latitude}&lon=${p.coords.longitude}`)).json();
+      const pc=(j.address.postcode||'').replace(/\s/g,'');if(/^\d{6}$/.test(pc))document.querySelector('[name=pin]').value=pc;
+      const o=[...$('#st').options].find(o=>j.address.state&&o.text.startsWith(j.address.state));if(o)$('#st').value=o.value;
+      m('Found: '+[j.address.suburb||j.address.city||j.address.town||'',j.address.state||''].filter(Boolean).join(', ')+'. Only your PIN and state are used; your coordinates stay in this browser unless weather lookup needs them.')}
+    catch{m('Got your position but could not look up the address. Enter your PIN and state.')}
+  },()=>m('Location was blocked. Pick your state and enter your PIN instead.'))};
+$('#f').onsubmit=async e=>{
+  e.preventDefault();
+  const d=new FormData(e.target);
+  let custom=null;try{custom=customRates()}catch(err){$('#out').textContent=err.message;return}
+  const res=await fetch('/analyze',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({state:d.get('state')||null,custom,lat:window.COORDS?window.COORDS[0]:null,lon:window.COORDS?window.COORDS[1]:null,bill_amount:+d.get('bill')||null,consumer_id:d.get('cid')||null,pin:d.get('pin'),household_size:+d.get('n'),billing_months:+d.get('days'),renter:d.get('renter')==='on',lang:d.get('lang')})});
+  window.CID=d.get('cid')||null;
+  if(!res.ok){const j=await res.json().catch(()=>({}));$('#out').textContent=typeof j.detail==='string'?j.detail:'Check your inputs: bill above 0, 6-digit PIN, 1 to 15 people.';return}
+  const r=await res.json(),s=r.split_kwh,t=r.kwh,f=r.fairness,sl=r.slab;
+  const pct=v=>(v/t*100).toFixed(1)+'%';
+  $('#out').innerHTML=`
+   ${r.confidence==='estimate'?`<p class="warn">We don't hold verified rates for ${r.tariff.state}, so this is an estimate: between ${r.kwh_range[0]} and ${r.kwh_range[1]} units. Open "use my own rates" and enter the slabs from your bill for an exact result.</p>`:''}
+   <div><div class="big">${r.kwh} units</div><div style="color:var(--mut)">${r.kwh_per_person} per person · ${r.co2_kg} kg CO₂ this month</div></div>
+   <div class="bar" role="img" aria-label="Base ${s.base}, cooling ${s.cooling}, standby ${s.standby} kWh">
+     <i style="width:${pct(s.base)};background:var(--acc)"></i><i style="width:${pct(s.cooling)};background:var(--warn)"></i><i style="width:${pct(s.standby)};background:var(--mut)"></i></div>
+   <div class="row"><span>Always-on use</span><b>${s.base} kWh</b></div>
+   <div class="row"><span>Cooling (from ${r.weather.cdd} degree-days)</span><b>${s.cooling} kWh</b></div>
+   <div class="row"><span>Standby loss</span><b>${s.standby} kWh</b></div>
+   <p id="slabp" class="${sl.units_over?'warn':'good'}">${sl.units_over?`You went ${sl.units_over} units past the ${sl.cliff_kwh}-unit slab, costing about ₹${sl.penalty_rs} extra.`:`You stayed under the ${sl.cliff_kwh}-unit slab.`}</p>
+   <p id="fairp" class="${f.beats_baseline?'good':'warn'}">For ${r.members} people in this weather, expected use is ${f.expected_kwh} units. Your score is ${f.score}${f.beats_baseline?': you beat it.':': above expected.'}</p>
+   <small style="color:var(--mut)">Rates: ${r.tariff.state}, ${r.tariff.source==='custom'?'your own rates':'registry, effective '+r.tariff.effective+' ('+r.tariff.status+')'} · Weather: ${r.weather.source}</small>
+   <div id="extras"></div>`;
+  extras(r);
+  if(custom&&$('#c_sh').checked&&(d.get('state')||r.tariff.state))fetch('/tariffs/submit',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({state:d.get('state')||'',tariff:custom,note:'from web form'})}).catch(()=>{});
+};
+
+function extras(r){
+  window.WB_CONTEXT=`State ${r.tariff.state}, rates ${r.tariff.source}/${r.confidence}. About ${r.kwh} units a month for ${r.members} people (${r.kwh_per_person} each). Score ${r.fairness.score}. Units over top slab: ${r.slab.units_over}.`;
+  if(r.confidence==='estimate')['slabp','fairp'].forEach(i=>setTimeout(()=>{const e=document.getElementById(i);e&&e.remove()}));
+  const o=r.offer,x=$('#extras');
+  const card=r.reward?`<h2>Your scratch card</h2><div class="sc"><div class="prize">${r.reward.label}</div><canvas id="cv" width="320" height="110" aria-label="Scratch to reveal"></canvas></div>${r.reward.preview_only?'<small>Preview mode: add a Consumer ID to unlock real rewards.</small>':'<p class="good">Verified bill.</p><button type="button" id="claim">Claim reward</button>'}`
+    :`<h2>No card this month</h2><p>Your use is above expected for ${r.members} people. Try the tip below and check next bill.</p>`;
+  const offer=o.type==='solar'?`<h2>Rooftop solar for you</h2>
+    <div class="row"><span>Size</span><b>${o.kw} kW (${o.roof_sqft} sq ft roof)</b></div>
+    <div class="row"><span>Cost before subsidy</span><b>₹${o.gross.toLocaleString('en-IN')}</b></div>
+    <div class="row"><span>PM Surya Ghar subsidy</span><b>−₹${o.subsidy.toLocaleString('en-IN')}</b></div>
+    <div class="row"><span>You pay</span><b>₹${o.net.toLocaleString('en-IN')}</b></div>
+    <p class="${o.monthly_saving>0?'good':'warn'}">Loan of ₹${o.emi.toLocaleString('en-IN')} a month, against a bill of about ₹${Math.round(r.bill_rs/r.months).toLocaleString('en-IN')}: ${o.monthly_saving>0?'you keep':'you lose'} ₹${Math.abs(o.monthly_saving).toLocaleString('en-IN')} a month.</p>
+    <button type="button" id="lead">Ask installers to call me</button>`
+    :`<h2>For renters</h2><p>${o.items.join(' and ')} move with you. Estimated saving: about ₹${o.est_saving_rs} a month.</p>`;
+  x.innerHTML=`<h2>Tip</h2><p>${r.nudge}</p><button type="button" id="say">Read it aloud</button>`+card+offer+'<h2>Neighbourhood ranking</h2><div id="lb"></div>';
+  $('#say').onclick=()=>{const u=new SpeechSynthesisUtterance(r.nudge);u.lang={en:'en-IN',hi:'hi-IN',gu:'gu-IN'}[r.lang];
+    if(!speechSynthesis.getVoices().some(v=>v.lang.startsWith(r.lang)))alert('No '+r.lang+' voice on this device. Try Chrome on Android or install a voice.');speechSynthesis.speak(u)};
+  const lead=$('#lead');if(lead)lead.onclick=()=>{lead.textContent='Request saved (demo)';lead.disabled=true};
+  if(r.reward)scratch();
+  const cl=$('#claim');if(cl)cl.onclick=async()=>{const q=await fetch('/claim',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({consumer_id:window.CID})});
+    cl.textContent=q.ok?'Claimed':'Already claimed this month';cl.disabled=true};
+  fetch('/leaderboard?score='+r.fairness.score).then(a=>a.json()).then(L=>{
+    $('#lb').innerHTML=L.map((e,i)=>`<div class="row"><span>${i+1}. ${e.name}</span><b class="${e.you?'good':''}">${e.score}</b></div>`).join('')+'<small>Score is use divided by what is expected for your household size and weather. Lower is better.</small>'});
+}
+function scratch(){
+  const c=$('#cv'),g=c.getContext('2d');let down=false,n=0;
+  g.fillStyle='#8aa0ae';g.fillRect(0,0,c.width,c.height);g.fillStyle='#fff';g.font='600 18px system-ui';g.fillText('Scratch here',110,62);
+  const at=e=>{const b=c.getBoundingClientRect(),k=c.width/b.width;g.globalCompositeOperation='destination-out';g.beginPath();
+    g.arc((e.clientX-b.left)*k,(e.clientY-b.top)*k,18,0,7);g.fill();if(++n>60)c.style.opacity=0};
+  c.onpointerdown=e=>{down=true;c.setPointerCapture(e.pointerId);at(e)};c.onpointermove=e=>down&&at(e);c.onpointerup=()=>down=false;
+}
+</script></main><script src="/static/site.js"></script></body></html>

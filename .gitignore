@@ -1,0 +1,6 @@
+.env
+data/submissions.jsonl
+data/tariffs_cache.json
+data/*.db
+.DS_Store
+__pycache__/

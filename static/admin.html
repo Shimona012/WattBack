@@ -1,0 +1,23 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>WattBack admin</title>
+<style>
+:root{--bg:#f1f5f7;--ink:#10283b;--mut:#5b7183;--acc:#0b7a68;--warn:#c4410c;--card:#fff;--line:#d5e0e6}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1a24;--ink:#e6eef3;--mut:#8fa5b5;--acc:#3ec9ae;--warn:#ff8a5c;--card:#15262f;--line:#26404f}}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,sans-serif;padding:2rem 1rem;display:grid;place-items:start center}
+main{width:min(720px,100%)}h1{margin:0 0 .25rem;letter-spacing:-.02em}table{width:100%;border-collapse:collapse;background:var(--card)}
+th,td{text-align:left;padding:.6rem;border-bottom:1px solid var(--line)}.cell{height:10px;border-radius:5px;background:var(--acc)}
+input[type=range]{width:100%}.out{font-size:1.4rem;font-weight:700}.wrap{overflow-x:auto}</style></head><body><main>
+<h1>Gujarat energy command view</h1><p style="color:var(--mut)">Synthetic data. Bars show kWh per person and solar readiness by PIN area.</p>
+<div class="wrap"><table id="t"><thead><tr><th>Area</th><th>Households</th><th>kWh per person</th><th>Solar readiness</th></tr></thead><tbody></tbody></table></div>
+<h2>Policy simulator</h2>
+<label>Share of high-slab households moving to 3 kW solar: <b id="p">10</b>%<input id="r" type="range" min="0" max="50" value="10"></label>
+<p>Peak load drops by <span class="out" id="mw"></span> MW and CO₂ falls by <span class="out" id="co"></span> tonnes a year.</p>
+<script>
+fetch('/admin-data').then(r=>r.json()).then(({rows,const:c})=>{
+  const mx=Math.max(...rows.map(r=>r.kwh_pp));
+  document.querySelector('tbody').innerHTML=rows.map(r=>`<tr><td>${r.area}<br><small>${r.pin}</small></td><td>${r.households.toLocaleString('en-IN')}</td>
+   <td><div class="cell" style="width:${r.kwh_pp/mx*100}%;background:var(--warn)"></div>${r.kwh_pp}</td><td><div class="cell" style="width:${r.solar_ready}%"></div>${r.solar_ready}</td></tr>`).join('');
+  const tot=rows.reduce((a,r)=>a+r.households,0)*c.slab3_share;
+  const f=()=>{const p=+r.value/100,n=tot*p;document.getElementById('p').textContent=r.value;
+    mw.textContent=(n*c.kw*c.peak_coincidence/1000).toFixed(1);co.textContent=Math.round(n*c.kw*c.gen_kwh_per_kw_yr*c.co2_kg_per_kwh/1000).toLocaleString('en-IN')};
+  const r=document.getElementById('r');r.oninput=f;f();});
+</script></main><script src="/static/site.js"></script></body></html>
