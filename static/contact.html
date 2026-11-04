@@ -1,8 +1,75 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Contact us - WattBack</title>
-<style>body{margin:0;background:var(--bg,#f1f5f7);display:grid;place-items:start center;padding:2rem 1rem;min-height:100vh}</style><meta name="color-scheme" content="light dark"><script>try{var d=document.documentElement,g=function(k,f){try{return localStorage.getItem(k)||f}catch(e){return f}},t=g("wb_theme","auto");if(t!=="auto")d.dataset.theme=t;d.dataset.lights=g("wb_lights","on");d.dataset.size=g("wb_size","md");d.dataset.glass=g("wb_glass","on")}catch(e){}</script><link rel="stylesheet" href="/static/site.css"></head>
+<style>body{margin:0;background:var(--bg,#f1f5f7);display:grid;place-items:start center;padding:2rem 1rem;min-height:100vh}</style><meta name="color-scheme" content="light dark"><script>try{var d=document.documentElement,g=function(k,f){try{return localStorage.getItem(k)||f}catch(e){return f}},t=g("wb_theme","auto");if(t!=="auto")d.dataset.theme=t;d.dataset.lights=g("wb_lights","on");d.dataset.size=g("wb_size","md");d.dataset.glass=g("wb_glass","on")}catch(e){}</script><link rel="stylesheet" href="/static/site.css?v=9"></head>
 <body><main class="page"><h1>Contact us</h1><p>Questions, corrections to a tariff, or feedback? Send a note and we will read it.</p>
 <form id="cf"><label>Name<input name="name" required maxlength="80"></label><label>Email<input name="email" type="email" required maxlength="120"></label>
-<label>Message<textarea name="message" rows="5" required minlength="5" maxlength="2000"></textarea></label><button>Send</button> <span id="cs" role="status"></span></form>
-<script>document.getElementById('cf').onsubmit=async e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target));
-const r=await fetch('/contact',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
-document.getElementById('cs').textContent=r.ok?'Thanks, we got it.':(r.status===429?'Too many messages, try later.':'Please check your details.');if(r.ok)e.target.reset()}</script></main><script src="/static/site.js"></script></body></html>
+<label>Message<textarea name="message" rows="5" required minlength="5" maxlength="2000"></textarea></label><button id="sbtn">Send</button> <span id="cs" role="status"></span></form>
+<script>
+function loadScript(src){
+  return new Promise((res,rej)=>{
+    if(document.querySelector(`script[src="${src}"]`)) return res();
+    const s = document.createElement('script');
+    s.src = src; s.async = true;
+    s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
+
+document.getElementById('cf').onsubmit = async e => {
+  e.preventDefault();
+  const form = e.target;
+  const status = document.getElementById('cs');
+  const btn = document.getElementById('sbtn');
+  const data = Object.fromEntries(new FormData(form));
+  data.ts = Date.now();
+  data.timestamp = new Date().toISOString();
+
+  btn.disabled = true;
+  status.textContent = 'Sending...';
+
+  let savedDirectToFirebase = false;
+
+  // 1. Check for client-side Firebase config and attempt direct Firestore save
+  try {
+    const cfgRes = await fetch('/auth/config');
+    const cfg = await cfgRes.json();
+    const fb = cfg.firebase;
+
+    if (fb && fb.apiKey && fb.projectId) {
+      if (!window.firebase || !window.firebase.firestore) {
+        await loadScript('https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js');
+        await loadScript('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js');
+      }
+      if (!firebase.apps.length) firebase.initializeApp(fb);
+      const db = firebase.firestore();
+      await db.collection('contacts').add(data);
+      savedDirectToFirebase = true;
+    }
+  } catch (err) {
+    console.warn('Direct client Firebase write not configured or failed:', err);
+  }
+
+  // 2. Also send to backend (which writes to Firebase Firestore if server credentials exist, and persists backup)
+  try {
+    const r = await fetch('/contact', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data)
+    });
+    if (r.ok || savedDirectToFirebase) {
+      status.textContent = savedDirectToFirebase ? 'Thanks! Saved directly to Firebase.' : 'Thanks, we got it.';
+      form.reset();
+    } else {
+      status.textContent = r.status === 429 ? 'Too many messages, try later.' : 'Please check your details.';
+    }
+  } catch (err) {
+    if (savedDirectToFirebase) {
+      status.textContent = 'Thanks! Saved directly to Firebase.';
+      form.reset();
+    } else {
+      status.textContent = 'Could not send message. Please try again.';
+    }
+  } finally {
+    btn.disabled = false;
+  }
+};
+</script></main><script src="/static/site.js?v=9"></script></body></html>

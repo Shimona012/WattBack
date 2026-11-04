@@ -28,14 +28,17 @@ h2{font-size:1.1rem;margin:1.25rem 0 .25rem}
 .prize{position:absolute;inset:0;display:grid;place-items:center;font-weight:700;font-size:1.3rem;color:var(--acc)}
 #cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;transition:opacity .4s}
 .warn{color:var(--warn);font-weight:600}.good{color:var(--acc);font-weight:600}
-</style><meta name="color-scheme" content="light dark"><script>try{var d=document.documentElement,g=function(k,f){try{return localStorage.getItem(k)||f}catch(e){return f}},t=g("wb_theme","auto");if(t!=="auto")d.dataset.theme=t;d.dataset.lights=g("wb_lights","on");d.dataset.size=g("wb_size","md");d.dataset.glass=g("wb_glass","on")}catch(e){}</script><link rel="stylesheet" href="/static/site.css"></head><body class="home"><main>
+</style><meta name="color-scheme" content="light dark"><script>try{var d=document.documentElement,g=function(k,f){try{return localStorage.getItem(k)||f}catch(e){return f}},t=g("wb_theme","auto");if(t!=="auto")d.dataset.theme=t;d.dataset.lights=g("wb_lights","on");d.dataset.size=g("wb_size","md");d.dataset.glass=g("wb_glass","on")}catch(e){}</script><link rel="stylesheet" href="/static/site.css?v=9"></head><body class="home"><main>
 <header><h1 class="mark">WattBack</h1><p class="tag">The light of an idea</p></header>
-<p class="sub">Enter your bill amount. We work out the units, the slab trap, and how you compare for a home your size.</p>
+<p class="sub">Enter your bill amount. We work out the units, the slab trap, and how you compare for a home your size. <button type="button" class="lnk open-help" style="display:inline-flex;align-items:center;gap:.25rem;font-size:.86rem;color:var(--acc);vertical-align:baseline;padding:0 .25rem;background:none;border:0;cursor:pointer;font-weight:600">Need help?</button></p>
 <form id="f">
-  <label>Bill amount (₹)<input name="bill" type="number" min="1" value="2480"></label>
+  <!-- Test dummy value commented for testing: value="2480" -->
+  <label>Bill amount (₹)<input name="bill" type="number" min="1" placeholder="e.g. 2480" required></label>
   <label style="grid-column:1/-1">Consumer ID (optional, verifies your bill and unlocks real rewards)<input name="cid" inputmode="numeric" pattern="\d{10}" placeholder="10 digits"></label>
-  <label>PIN code<input name="pin" pattern="\d{6}" value="382010" required></label>
-  <label>People in the home<input name="n" type="number" min="1" max="15" value="4" required></label>
+  <!-- Test dummy value commented for testing: value="382010" -->
+  <label>PIN code<input name="pin" pattern="\d{6}" placeholder="e.g. 382010" required></label>
+  <!-- Test dummy value commented for testing: value="4" -->
+  <label>People in the home<input name="n" type="number" min="1" max="15" placeholder="e.g. 4" required></label>
   <label>State<select name="state" id="st"><option value="">Auto from PIN</option></select></label>
   <button type="button" class="ghost" id="loc">Use my location</button>
   <small id="locmsg" style="grid-column:1/-1;color:var(--mut)"></small>
@@ -57,6 +60,7 @@ h2{font-size:1.1rem;margin:1.25rem 0 .25rem}
 <section id="out" aria-live="polite"></section>
 <script>
 const $=s=>document.querySelector(s);
+const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 fetch('/tariffs/states').then(r=>r.json()).then(L=>{$('#st').innerHTML+=L.map(x=>`<option value="${x.code}">${x.name}${x.loaded?'':' (estimate only)'}</option>`).join('')});
 try{const c=JSON.parse(localStorage.getItem('wb_custom')||'null');if(c){$('#c_sl').value=c.sl;$('#c_fx').value=c.fx;$('#c_du').value=c.du;$('#c_fp').value=c.fp;$('#c_te').checked=c.te}}catch{}
 function customRates(){
@@ -88,28 +92,175 @@ $('#f').onsubmit=async e=>{
   if(!res.ok){const j=await res.json().catch(()=>({}));$('#out').textContent=typeof j.detail==='string'?j.detail:'Check your inputs: bill above 0, 6-digit PIN, 1 to 15 people.';return}
   const r=await res.json(),s=r.split_kwh,t=r.kwh,f=r.fairness,sl=r.slab;
   const pct=v=>(v/t*100).toFixed(1)+'%';
+  const c=2*Math.PI*38;
+  const pBase=(s.base/t)*c, pCool=(s.cooling/t)*c, pStby=(s.standby/t)*c;
+  const offBase=0, offCool=-pBase, offStby=-(pBase+pCool);
+  const maxCliff=Math.max(t, (sl.cliff_kwh||250)*1.25);
+  const userPct=Math.min(100, (t/maxCliff*100)).toFixed(1);
+  const cliffPct=sl.cliff_kwh?Math.min(100, (sl.cliff_kwh/maxCliff*100)).toFixed(1):null;
+
   $('#out').innerHTML=`
-   ${r.confidence==='estimate'?`<p class="warn">We don't hold verified rates for ${r.tariff.state}, so this is an estimate: between ${r.kwh_range[0]} and ${r.kwh_range[1]} units. Open "use my own rates" and enter the slabs from your bill, or from the ${r.tariff.regulator} tariff order, for an exact result.</p>`:''}
+   ${r.confidence==='estimate'?`<p class="warn">We don't hold verified rates for ${esc(r.tariff.state)}, so this is an estimate: between ${r.kwh_range[0]} and ${r.kwh_range[1]} units. Open "use my own rates" and enter the slabs from your bill, or from the ${esc(r.tariff.regulator)} tariff order, for an exact result.</p>`:''}
    <div><div class="big">${r.kwh} units</div><div style="color:var(--mut)">${r.kwh_per_person} per person · ${r.co2_kg} kg CO₂ this month</div></div>
-   <div class="bar" role="img" aria-label="Base ${s.base}, cooling ${s.cooling}, standby ${s.standby} kWh">
-     <i style="width:${pct(s.base)};background:var(--acc)"></i><i style="width:${pct(s.cooling)};background:var(--warn)"></i><i style="width:${pct(s.standby)};background:var(--mut)"></i></div>
-   <div class="row"><span>Always-on use</span><b>${s.base} kWh</b></div>
-   <div class="row"><span>Cooling (from ${r.weather.cdd} degree-days)</span><b>${s.cooling} kWh</b></div>
-   <div class="row"><span>Standby loss</span><b>${s.standby} kWh</b></div>
+
+   <!-- Visual Energy Distribution & Slab Breakdown Graph (Theme styled) -->
+   <div class="viz-card" role="region" aria-label="Energy breakdown chart">
+     <div class="viz-head"><b>Energy use breakdown</b><small>${r.kwh} kWh this month</small></div>
+     <div class="viz-row">
+       <div class="donut-box">
+         <svg class="donut-svg" viewBox="0 0 100 100" role="img" aria-label="Breakdown chart">
+           <circle cx="50" cy="50" r="38" fill="none" stroke="var(--line)" stroke-width="14" opacity="0.3"></circle>
+           <circle cx="50" cy="50" r="38" fill="none" stroke="var(--acc)" stroke-width="14" stroke-dasharray="${pBase} ${c}" stroke-dashoffset="${offBase}"></circle>
+           <circle cx="50" cy="50" r="38" fill="none" stroke="var(--warn)" stroke-width="14" stroke-dasharray="${pCool} ${c}" stroke-dashoffset="${offCool}"></circle>
+           <circle cx="50" cy="50" r="38" fill="none" stroke="var(--mut)" stroke-width="14" stroke-dasharray="${pStby} ${c}" stroke-dashoffset="${offStby}"></circle>
+         </svg>
+         <div class="donut-core"><b>${r.kwh}</b><small>Units</small></div>
+       </div>
+       <div class="viz-breakdown">
+         <div class="vb-item"><span class="vb-label"><i class="vb-dot" style="background:var(--acc);color:var(--glow)"></i>Always-on base</span><b>${s.base} kWh <small style="color:var(--mut)">(${pct(s.base)})</small></b></div>
+         <div class="vb-item"><span class="vb-label"><i class="vb-dot" style="background:var(--warn);color:var(--glow2)"></i>Cooling load</span><b>${s.cooling} kWh <small style="color:var(--mut)">(${pct(s.cooling)})</small></b></div>
+         <div class="vb-item"><span class="vb-label"><i class="vb-dot" style="background:var(--mut);color:transparent"></i>Standby loss</span><b>${s.standby} kWh <small style="color:var(--mut)">(${pct(s.standby)})</small></b></div>
+       </div>
+     </div>
+     ${sl.cliff_kwh?`
+     <div class="slab-meter">
+       <div class="slab-meter-label"><span>Slab progress (Cliff: ${sl.cliff_kwh} units)</span><b>${sl.units_over?`<span class="warn">+${sl.units_over} past cliff</span>`:`<span class="good">Under cliff</span>`}</b></div>
+       <div class="slab-meter-bar">
+         <div style="width:${cliffPct}%;background:var(--acc);opacity:0.35;height:100%"></div>
+         <div style="width:${Math.max(0,100-cliffPct)}%;background:var(--warn);opacity:0.25;height:100%"></div>
+         <div class="slab-meter-marker" style="left:${userPct}%;background:${sl.units_over?'var(--warn)':'var(--acc)'};box-shadow:0 0 8px ${sl.units_over?'var(--warn)':'var(--acc)'}" title="${r.kwh} units used"></div>
+       </div>
+     </div>`:''}
+   </div>
+
    <p id="slabp" class="${sl.units_over?'warn':'good'}">${sl.units_over?`You went ${sl.units_over} units past the ${sl.cliff_kwh}-unit slab, costing about ₹${sl.penalty_rs} extra.`:`You stayed under the ${sl.cliff_kwh}-unit slab.`}</p>
    <p id="fairp" class="${f.beats_baseline?'good':'warn'}">For ${r.members} people in this weather, expected use is ${f.expected_kwh} units. Your score is ${f.score}${f.beats_baseline?': you beat it.':': above expected.'}</p>
-   <small style="color:var(--mut)">Rates: ${r.tariff.state}, ${r.tariff.source==='custom'?'your own rates':'registry, effective '+r.tariff.effective+' ('+r.tariff.status+')'} · Weather: ${r.weather.source}</small>
+   <small style="color:var(--mut)">Rates: ${esc(r.tariff.state)}, ${r.tariff.source==='custom'?'your own rates':'registry, effective '+esc(r.tariff.effective)+' ('+esc(r.tariff.status)+')'} · Weather: ${esc(r.weather.source)}</small>
+   <div style="display:flex;gap:.6rem;margin-top:.9rem">
+     <button type="button" id="dl-report" class="ghost" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:.45rem;padding:.55rem .85rem"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download Report</button>
+     <button type="button" id="print-report" class="ghost" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:.45rem;padding:.55rem .85rem"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Print / Save PDF</button>
+   </div>
    <div id="extras"></div>`;
   extras(r);
+  $('#dl-report').onclick=()=>downloadReport(r);
+  $('#print-report').onclick=()=>window.print();
   if(custom&&$('#c_sh').checked&&(d.get('state')||r.tariff.state))fetch('/tariffs/submit',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({state:d.get('state')||'',tariff:custom,note:'from web form'})}).catch(()=>{});
 };
 
+
+function downloadReport(r){
+  const s = r.split_kwh, sl = r.slab, f = r.fairness, o = r.offer;
+  const dateStr = new Date().toLocaleDateString('en-IN', {day:'numeric', month:'short', year:'numeric'});
+  const text = `========================================================
+WATTBACK - HOME ENERGY AUDIT & TARIFF ANALYSIS REPORT
+Date: ${dateStr}
+Mission LiFE Reference (GEDA)
+========================================================
+
+1. CONSUMPTION SUMMARY
+- Total Energy Consumed: ${r.kwh} units (kWh)
+- Bill Amount: ₹${r.bill_rs} (covers ${r.months} month${r.months > 1 ? 's' : ''})
+- Household Size: ${r.members} person(s)
+- Average per Person: ${r.kwh_per_person} kWh/person
+- Carbon Footprint: ${r.co2_kg} kg CO2 emitted
+
+2. APPLIANCE & WEATHER LOAD SPLIT
+- Always-on Base Load: ${s.base} kWh (${(s.base/r.kwh*100).toFixed(1)}%)
+- Weather / AC Cooling Load: ${s.cooling} kWh (${(s.cooling/r.kwh*100).toFixed(1)}%)
+  [Based on ${r.weather.cdd} Cooling Degree-Days (${r.weather.source})]
+- Standby Loss: ${s.standby} kWh (${(s.standby/r.kwh*100).toFixed(1)}%)
+
+3. TARIFF SLAB & CLIFF IMPACT
+- State Tariff: ${r.tariff.state} (${r.tariff.source === 'custom' ? 'Custom Rates' : 'Official Registry, Effective ' + r.tariff.effective})
+- Cliff Threshold: ${sl.cliff_kwh} units
+- Units Over Threshold: ${sl.units_over} units
+- Cliff Surcharge / Penalty: ₹${sl.penalty_rs} extra
+${sl.units_over ? '>> ALERT: You crossed into the highest tier bracket. Reducing use below ' + sl.cliff_kwh + ' units eliminates this surcharge.' : '>> GOOD: Consumption remained within lower tariff tiers.'}
+
+4. FAIRNESS BENCHMARK
+- Household Expected Use: ${f.expected_kwh} units
+- Actual vs Expected Score: ${f.score}
+- Result: ${f.beats_baseline ? 'Beats baseline efficiency.' : 'Above expected usage for this weather and headcount.'}
+
+5. SOLAR RECOMMENDATION (${o.type === 'solar' ? 'PM Surya Ghar' : 'Renter Kit'})
+${o.type === 'solar' ? `- Recommended Capacity: ${o.kw} kW (Approx. ${o.roof_sqft} sq ft roof space)
+- Gross Installation Cost: ₹${o.gross.toLocaleString('en-IN')}
+- Government PM Surya Ghar Subsidy: -₹${o.subsidy.toLocaleString('en-IN')}
+- Net Cost to Customer: ₹${o.net.toLocaleString('en-IN')}
+- Estimated Monthly Loan EMI: ₹${o.emi.toLocaleString('en-IN')}/mo
+- Net Monthly Benefit: ${o.monthly_saving > 0 ? '₹' + o.monthly_saving.toLocaleString('en-IN') + ' savings per month' : 'Net neutral'}
+- Official Portal: https://pmsuryaghar.gov.in/` : `- Recommended: Portable / plug-in efficiency items (${o.items.join(', ')})
+- Estimated Monthly Savings: ₹${o.est_saving_rs}/mo`}
+
+6. TAILORED EFFICIENCY NUDGE
+${r.nudge}
+
+========================================================
+Generated by WattBack
+Official Government Rooftop Solar: https://pmsuryaghar.gov.in/
+========================================================`;
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `WattBack_Energy_Report_${r.tariff.state||'IND'}_${Date.now()}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+}
+
+function showInstallerModal(r){
+  let d = document.getElementById('ins-modal');
+  if(!d){
+    d = document.createElement('dialog');
+    d.id = 'ins-modal';
+    d.className = 'dlg';
+    document.body.appendChild(d);
+  }
+  const isGJ = r && r.tariff && r.tariff.state === 'GJ';
+  const portalUrl = isGJ ? 'https://geda.gujarat.gov.in/' : 'https://pmsuryaghar.gov.in/';
+  const portalName = isGJ ? 'GEDA & PM Surya Ghar Official Portal (Gujarat)' : 'PM Surya Ghar: National Rooftop Solar Portal';
+
+  d.innerHTML = `
+    <div class="chead">
+      <b>Government Solar Portal &amp; Empanelled Installers</b>
+      <button id="ins-x" type="button" class="ghost" style="border:0!important;font-size:1.4rem;padding:0 .4rem;cursor:pointer">&times;</button>
+    </div>
+    <div style="padding:.85rem 0;line-height:1.55;font-size:.92rem">
+      <p style="margin:0 0 .75rem;color:var(--warn);font-weight:600">
+        Notice: Customized &amp; third-party solar provider databases are not directly synced with independent web tools.
+      </p>
+      <p style="margin:0 0 .8rem;color:var(--ink)">
+        To safeguard consumers and guarantee your central government subsidy (up to ₹78,000 under <b>PM Surya Ghar</b>), you must apply through your state's registered DISCOM / nodal agency where empanelled, vetted installers are assigned.
+      </p>
+      <div style="background:var(--field);padding:.85rem;border-radius:var(--r-i);border:1px solid var(--glass-line);margin-bottom:.85rem">
+        <b style="color:var(--acc)">Authorized Official Channel:</b><br>
+        <span style="font-size:1rem;font-weight:700">${portalName}</span><br>
+        <small style="color:var(--mut)">Direct link to Government empanelled vendors, net-metering &amp; direct subsidy disbursement.</small>
+      </div>
+    </div>
+    <div class="acts" style="display:flex;justify-content:flex-end;gap:.6rem">
+      <button id="ins-close-btn" type="button" class="ghost">Cancel</button>
+      <a href="${portalUrl}" target="_blank" rel="noopener noreferrer" style="text-decoration:none">
+        <button id="ins-proceed-btn" type="button" style="display:inline-flex;align-items:center;gap:.4rem">
+          Proceed to Official Portal &rarr;
+        </button>
+      </a>
+    </div>
+  `;
+  if(typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
+  document.getElementById('ins-x').onclick = () => d.close ? d.close() : d.removeAttribute('open');
+  document.getElementById('ins-close-btn').onclick = () => d.close ? d.close() : d.removeAttribute('open');
+  document.getElementById('ins-proceed-btn').onclick = () => d.close ? d.close() : d.removeAttribute('open');
+}
+
 function extras(r){
+
   window.WB_CONTEXT=`State ${r.tariff.state}, rates ${r.tariff.source}/${r.confidence}. About ${r.kwh} units a month for ${r.members} people (${r.kwh_per_person} each). Score ${r.fairness.score}. Units over top slab: ${r.slab.units_over}.`;
   if(r.confidence==='estimate')['slabp','fairp'].forEach(i=>setTimeout(()=>{const e=document.getElementById(i);e&&e.remove()}));
   const o=r.offer,x=$('#extras');
-  const card=r.reward?`<h2>Your scratch card</h2><div class="sc"><div class="prize">${r.reward.label}</div><canvas id="cv" width="320" height="110" aria-label="Scratch to reveal"></canvas></div>${r.reward.preview_only?'<small>Preview mode: add a Consumer ID to unlock real rewards.</small>':'<p class="good">Verified bill.</p><button type="button" id="claim">Claim reward</button>'}`
+  const card=r.reward?`<h2>Your scratch card</h2><div class="sc"><div class="prize">${esc(r.reward.label)}</div><canvas id="cv" width="320" height="110" aria-label="Scratch to reveal"></canvas></div>${r.reward.preview_only?'<small>Preview mode: add a Consumer ID to unlock real rewards.</small>':'<p class="good">Verified bill.</p><button type="button" id="claim">Claim reward</button>'}`
     :`<h2>No card this month</h2><p>Your use is above expected for ${r.members} people. Try the tip below and check next bill.</p>`;
   const offer=o.type==='solar'?`<h2>Rooftop solar for you</h2>
     <div class="row"><span>Size</span><b>${o.kw} kW (${o.roof_sqft} sq ft roof)</b></div>
@@ -118,16 +269,16 @@ function extras(r){
     <div class="row"><span>You pay</span><b>₹${o.net.toLocaleString('en-IN')}</b></div>
     <p class="${o.monthly_saving>0?'good':'warn'}">Loan of ₹${o.emi.toLocaleString('en-IN')} a month, against a bill of about ₹${Math.round(r.bill_rs/r.months).toLocaleString('en-IN')}: ${o.monthly_saving>0?'you keep':'you lose'} ₹${Math.abs(o.monthly_saving).toLocaleString('en-IN')} a month.</p>
     <button type="button" id="lead">Ask installers to call me</button>`
-    :`<h2>For renters</h2><p>${o.items.join(' and ')} move with you. Estimated saving: about ₹${o.est_saving_rs} a month.</p>`;
-  x.innerHTML=`<h2>Tip</h2><p>${r.nudge}</p><button type="button" id="say">Read it aloud</button>`+card+offer+'<h2>Neighbourhood ranking</h2><div id="lb"></div>';
+    :`<h2>For renters</h2><p>${esc(o.items.join(' and '))} move with you. Estimated saving: about ₹${o.est_saving_rs} a month.</p>`;
+  x.innerHTML=`<h2>Tip</h2><p>${esc(r.nudge)}</p><button type="button" id="say">Read it aloud</button>`+card+offer+'<h2>Neighbourhood ranking</h2><div id="lb"></div>';
   $('#say').onclick=()=>{const u=new SpeechSynthesisUtterance(r.nudge);u.lang={en:'en-IN',hi:'hi-IN',gu:'gu-IN'}[r.lang];
     if(!speechSynthesis.getVoices().some(v=>v.lang.startsWith(r.lang)))alert('No '+r.lang+' voice on this device. Try Chrome on Android or install a voice.');speechSynthesis.speak(u)};
-  const lead=$('#lead');if(lead)lead.onclick=()=>{lead.textContent='Request saved (demo)';lead.disabled=true};
+  const lead=$('#lead');if(lead)lead.onclick=()=>showInstallerModal(r);
   if(r.reward)scratch();
   const cl=$('#claim');if(cl)cl.onclick=async()=>{const q=await fetch('/claim',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({consumer_id:window.CID})});
     cl.textContent=q.ok?'Claimed':'Already claimed this month';cl.disabled=true};
   fetch('/leaderboard?score='+r.fairness.score).then(a=>a.json()).then(L=>{
-    $('#lb').innerHTML=L.map((e,i)=>`<div class="row"><span>${i+1}. ${e.name}</span><b class="${e.you?'good':''}">${e.score}</b></div>`).join('')+'<small>Score is use divided by what is expected for your household size and weather. Lower is better.</small>'});
+    $('#lb').innerHTML=L.map((e,i)=>`<div class="row"><span>${i+1}. ${esc(e.name)}</span><b class="${e.you?'good':''}">${e.score}</b></div>`).join('')+'<small>Score is use divided by what is expected for your household size and weather. Lower is better.</small>'});
 }
 function scratch(){
   const c=$('#cv'),g=c.getContext('2d');let down=false,n=0;
@@ -136,4 +287,4 @@ function scratch(){
     g.arc((e.clientX-b.left)*k,(e.clientY-b.top)*k,18,0,7);g.fill();if(++n>60)c.style.opacity=0};
   c.onpointerdown=e=>{down=true;c.setPointerCapture(e.pointerId);at(e)};c.onpointermove=e=>down&&at(e);c.onpointerup=()=>down=false;
 }
-</script></main><script src="/static/site.js"></script></body></html>
+</script></main><script src="/static/site.js?v=9"></script></body></html>

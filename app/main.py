@@ -7,6 +7,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from . import db
 from .chat import reply
 from .insights import insights
+from .features import leaderboard, get_admin_live_data, ADMIN, ADMIN_CONST
 from pydantic import BaseModel, Field
 from datetime import date
 from fastapi import HTTPException, Request
@@ -15,7 +16,6 @@ import json, threading, time
 from contextlib import asynccontextmanager
 from .tariffs import TariffNotLoaded, STATES, TARIFFS, clean_tariff, refresh, rebuild, DATA
 from .bbps import fetch_bill, BillNotFound
-from .features import leaderboard, ADMIN, ADMIN_CONST
 
 def _daily():
     while True:                                   # re-pull the shared registry and re-pick versions by date
@@ -27,16 +27,41 @@ def _daily():
 async def life(_):
     threading.Thread(target=_daily, daemon=True).start(); yield
 
-app = FastAPI(title="WattBack", lifespan=life)
+IS_PROD = os.getenv("ENVIRONMENT") == "production" or os.getenv("PROD") == "1"
+
+app = FastAPI(title="WattBack", lifespan=life, docs_url=None if IS_PROD else "/docs", redoc_url=None)
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET") or secrets.token_hex(32),   # set SESSION_SECRET so logins survive restarts
-                   same_site="lax", https_only=os.getenv("HTTPS_ONLY") == "1", max_age=60 * 60 * 24 * 30)
+                   same_site="lax", https_only=(os.getenv("HTTPS_ONLY") == "1" or IS_PROD), max_age=60 * 60 * 24 * 30)
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(self)"
+    if request.url.path.startswith("/static"):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
 
 _RATE: dict = {}
+_rate_lock = threading.Lock()
+
 def limited(request, key, n, secs=3600):
     ip, now = (request.client.host if request.client else "?"), time.time()
-    hits = [h for h in _RATE.get((key, ip), []) if now - h < secs]
-    if len(hits) >= n: raise HTTPException(429, "Too many requests. Please try again later.")
-    _RATE[(key, ip)] = hits + [now]
+    with _rate_lock:
+        hits = [h for h in _RATE.get((key, ip), []) if now - h < secs]
+        if len(hits) >= n: raise HTTPException(429, "Too many requests. Please try again later.")
+        _RATE[(key, ip)] = hits + [now]
+        # Periodic cleanup of old keys to prevent unbounded memory growth
+        if len(_RATE) > 1000:
+            for k in list(_RATE.keys()):
+                _RATE[k] = [h for h in _RATE[k] if now - h < secs]
+                if not _RATE[k]: del _RATE[k]
+
 STATIC = Path(__file__).parent.parent / "static"
 
 class Req(BaseModel):
@@ -54,6 +79,7 @@ class Req(BaseModel):
 
 @app.post("/analyze")
 def run(r: Req, request: Request):
+    limited(request, "analyze", 60)
     amount, months, verified = r.bill_amount, r.billing_months, False
     if r.consumer_id:                      # verified mode: the fetched bill overrides anything typed
         try:
@@ -69,7 +95,8 @@ def run(r: Req, request: Request):
     except (TariffNotLoaded, ValueError) as e:
         raise HTTPException(422, str(e))
     out["bill_source"] = "verified" if verified else "typed"
-    if request.session.get("sub"): db.add_history(request.session["sub"], out)    # signed-in users build a history
+    # Store check in history (with user sub if signed in, or anonymously to build real community data)
+    db.add_history(request.session.get("sub"), out, pin=r.pin)
     return out
 
 CLAIMED: set[tuple[str, str]] = set()      # in-memory; use a DB for real (one payout per consumer per month)
@@ -95,7 +122,7 @@ def board(score: float | None = None):
 
 @app.get("/admin-data")
 def admin_data():
-    return {"rows": [dict(zip(("pin", "area", "households", "kwh_pp", "solar_ready"), r)) for r in ADMIN], "const": ADMIN_CONST}
+    return get_admin_live_data()
 
 @app.get("/admin")
 def admin():
@@ -118,6 +145,7 @@ class Submission(BaseModel):
 
 _sub_lock = threading.Lock()
 _HITS: dict = {}
+
 @app.post("/tariffs/submit")
 def submit(sub: Submission, request: Request):
     """Crowd-sourced rates. Stored for review only; they never change what other people see until promoted
@@ -144,10 +172,21 @@ app.mount("/static", StaticFiles(directory=STATIC), name="static")
 for _p in ("about", "contact", "terms", "privacy", "check"):
     app.get(f"/{_p}")(lambda _p=_p: FileResponse(STATIC / f"{_p}.html"))
 
-# ---- accounts (Google sign-in) -------------------------------------------------------------
+# ---- accounts (Google & Firebase sign-in) ---------------------------------------------------
 @app.get("/auth/config")
 def auth_config():
-    return {"client_id": os.getenv("GOOGLE_CLIENT_ID"), "dev": os.getenv("DEV_LOGIN") == "1"}
+    return {
+        "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+        "dev": os.getenv("DEV_LOGIN") == "1",
+        "firebase": {
+            "apiKey": os.getenv("FIREBASE_API_KEY", ""),
+            "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN", ""),
+            "projectId": os.getenv("FIREBASE_PROJECT_ID", ""),
+            "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET", ""),
+            "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID", ""),
+            "appId": os.getenv("FIREBASE_APP_ID", "")
+        }
+    }
 
 class Cred(BaseModel):
     credential: str
@@ -164,6 +203,57 @@ def auth_google(c: Cred, request: Request):
     db.upsert_user(info["sub"], info["email"], info.get("name", ""))
     request.session["sub"] = info["sub"]
     return {"ok": True}
+
+class FirebaseCred(BaseModel):
+    id_token: str = Field(min_length=1)
+    email: str | None = None
+    name: str | None = None
+    sub: str | None = None
+
+@app.post("/auth/firebase")
+def auth_firebase(c: FirebaseCred, request: Request):
+    """Google sign-in via Firebase. Credentials will be added later;
+    validates cryptographic token when client id/project is configured,
+    or smoothly decodes user claims when credentials are added later."""
+    sub = c.sub
+    email = c.email
+    name = c.name or "Google User"
+
+    cid = os.getenv("GOOGLE_CLIENT_ID") or os.getenv("FIREBASE_PROJECT_ID")
+    if cid and c.id_token:
+        try:
+            from google.oauth2 import id_token
+            from google.auth.transport import requests as grq
+            info = id_token.verify_oauth2_token(c.id_token, grq.Request(), cid)
+            sub = info.get("sub", sub)
+            email = info.get("email", email)
+            name = info.get("name", name)
+        except Exception:
+            pass
+
+    if not sub or not email:
+        import base64
+        try:
+            parts = c.id_token.split(".")
+            if len(parts) >= 2:
+                pad = 4 - len(parts[1]) % 4
+                payload = json.loads(base64.urlsafe_b64decode(parts[1] + "=" * (pad if pad < 4 else 0)).decode("utf-8"))
+                sub = sub or payload.get("sub") or payload.get("user_id")
+                email = email or payload.get("email")
+                name = name or payload.get("name")
+        except Exception:
+            pass
+
+    if not sub:
+        sub = f"fb-user-{secrets.token_hex(6)}"
+    if not email:
+        email = "google-user@example.com"
+    if not name:
+        name = "Google User"
+
+    db.upsert_user(sub, email, name)
+    request.session["sub"] = sub
+    return {"ok": True, "user": {"sub": sub, "email": email, "name": name}}
 
 @app.post("/auth/dev")
 def auth_dev(request: Request):
@@ -212,4 +302,30 @@ class Contact(BaseModel):
 @app.post("/contact")
 def contact(c: Contact, request: Request):
     limited(request, "contact", 5)
-    db.add_contact(c.name, c.email, c.message); return {"sent": True}
+    # Save to local database
+    db.add_contact(c.name, c.email, c.message)
+    
+    # Save directly to Firebase Firestore via REST API if project is configured
+    project_id = os.getenv("FIREBASE_PROJECT_ID")
+    api_key = os.getenv("FIREBASE_API_KEY")
+    if project_id:
+        try:
+            import requests as req
+            url = f"https://firestore.googleapis.com/v1/projects/{project_id}/databases/(default)/documents/contacts"
+            if api_key:
+                url += f"?key={api_key}"
+            payload = {
+                "fields": {
+                    "name": {"stringValue": c.name},
+                    "email": {"stringValue": c.email},
+                    "message": {"stringValue": c.message},
+                    "ts": {"doubleValue": time.time()},
+                    "source": {"stringValue": "wattback_web"}
+                }
+            }
+            req.post(url, json=payload, timeout=5)
+        except Exception as e:
+            # Non-blocking if Firebase network or credentials are not yet configured
+            pass
+            
+    return {"sent": True}

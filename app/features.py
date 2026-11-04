@@ -43,17 +43,53 @@ def nudge(slab: dict, lang: str, estimate: bool = False) -> str:
     k = "est" if estimate else ("over" if slab["units_over"] else "ok")
     return NUDGE[k].get(lang, NUDGE[k]["en"]).format(over=slab["units_over"], cliff=slab["cliff_kwh"], pen=slab["penalty_rs"])
 
-# Synthetic society ranking (fairness score = actual / expected for household size). Replace with real data.
-SOCIETIES = [("Sector 21, Gandhinagar", 0.74), ("Satellite, Ahmedabad", 0.86), ("Kalawad Road, Rajkot", 0.93),
-             ("Navrangpura, Ahmedabad", 1.04), ("Sector 7, Gandhinagar", 1.12), ("Alkapuri, Vadodara", 1.21)]
+# Synthetic society ranking kept commented for testing. Active service uses live user-inputted data from DB.
+# SOCIETIES_SYNTHETIC = [("Sector 21, Gandhinagar", 0.74), ("Satellite, Ahmedabad", 0.86), ("Kalawad Road, Rajkot", 0.93),
+#                        ("Navrangpura, Ahmedabad", 1.04), ("Sector 7, Gandhinagar", 1.12), ("Alkapuri, Vadodara", 1.21)]
 
 def leaderboard(score):
-    rows = [{"name": n, "score": s} for n, s in SOCIETIES]
+    """Leaderboard built strictly from live user-inputted checks."""
+    rows = []
+    # If testing with synthetic dummy data is needed, uncomment:
+    # rows = [{"name": n, "score": s} for n, s in SOCIETIES_SYNTHETIC]
+    try:
+        from . import db
+        live_scores = db.get_live_scores(limit=10)
+        seen = set()
+        for i, s in enumerate(live_scores):
+            label = f"Household {s.get('state', 'India')} ({s.get('pin', '***')})"
+            if label not in seen and s.get("score") is not None:
+                seen.add(label)
+                rows.append({"name": label, "score": round(float(s["score"]), 2)})
+    except Exception:
+        pass
+
     if score is not None:
         rows.append({"name": "You", "score": score, "you": True})
     return sorted(rows, key=lambda r: r["score"])
 
-# Synthetic admin data: (PIN, area, households, avg kWh/person/month, solar readiness 0-100)
-ADMIN = [("380001", "Ahmedabad Central", 82000, 71, 78), ("382010", "Gandhinagar", 41000, 66, 84),
-         ("360001", "Rajkot", 56000, 63, 80), ("390001", "Vadodara", 61000, 69, 76), ("395001", "Surat", 94000, 74, 72)]
+# Synthetic admin data kept commented for testing. Active service aggregates live user submissions.
+# ADMIN_SYNTHETIC = [("380001", "Ahmedabad Central", 82000, 71, 78), ("382010", "Gandhinagar", 41000, 66, 84),
+#                    ("360001", "Rajkot", 56000, 63, 80), ("390001", "Vadodara", 61000, 69, 76), ("395001", "Surat", 94000, 74, 72)]
+ADMIN = [] # Empty for live mode; populated live via get_admin_live_data()
 ADMIN_CONST = {"slab3_share": 0.30, "kw": 3, "peak_coincidence": 0.6, "co2_kg_per_kwh": 0.82, "gen_kwh_per_kw_yr": GEN_KWH_PER_KW_YR}
+
+def get_admin_live_data():
+    """Returns aggregated data from live user-inputted checks."""
+    # To test with synthetic dummy data, uncomment:
+    # return {"rows": [dict(zip(("pin", "area", "households", "kwh_pp", "solar_ready"), r)) for r in ADMIN_SYNTHETIC], "const": ADMIN_CONST}
+    try:
+        from . import db
+        rows = db.get_live_admin_aggregates()
+        formatted = []
+        for r in rows:
+            formatted.append({
+                "pin": r["pin"],
+                "area": f"{r['state']} ({r['pin']})",
+                "households": r["households"],
+                "kwh_pp": round(float(r["avg_kwh_pp"] or 0), 1),
+                "solar_ready": int(r["solar_ready"] or 75)
+            })
+        return {"rows": formatted, "const": ADMIN_CONST}
+    except Exception:
+        return {"rows": [], "const": ADMIN_CONST}

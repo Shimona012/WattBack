@@ -5,19 +5,32 @@
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,sans-serif;padding:2rem 1rem;display:grid;place-items:start center}
 main{width:min(720px,100%)}h1{margin:0 0 .25rem;letter-spacing:-.02em}table{width:100%;border-collapse:collapse;background:var(--card)}
 th,td{text-align:left;padding:.6rem;border-bottom:1px solid var(--line)}.cell{height:10px;border-radius:5px;background:var(--acc)}
-input[type=range]{width:100%}.out{font-size:1.4rem;font-weight:700}.wrap{overflow-x:auto}</style><meta name="color-scheme" content="light dark"><script>try{var d=document.documentElement,g=function(k,f){try{return localStorage.getItem(k)||f}catch(e){return f}},t=g("wb_theme","auto");if(t!=="auto")d.dataset.theme=t;d.dataset.lights=g("wb_lights","on");d.dataset.size=g("wb_size","md");d.dataset.glass=g("wb_glass","on")}catch(e){}</script><link rel="stylesheet" href="/static/site.css"></head><body><main>
-<h1>Gujarat energy command view</h1><p style="color:var(--mut)">Synthetic data. Bars show kWh per person and solar readiness by PIN area.</p>
+input[type=range]{width:100%}.out{font-size:1.4rem;font-weight:700}.wrap{overflow-x:auto}
+</style><meta name="color-scheme" content="light dark"><script>try{var d=document.documentElement,g=function(k,f){try{return localStorage.getItem(k)||f}catch(e){return f}},t=g("wb_theme","auto");if(t!=="auto")d.dataset.theme=t;d.dataset.lights=g("wb_lights","on");d.dataset.size=g("wb_size","md");d.dataset.glass=g("wb_glass","on")}catch(e){}</script><link rel="stylesheet" href="/static/site.css?v=9"></head><body><main>
+<h1>Gujarat energy command view</h1>
+<!-- Test synthetic dummy data note commented for testing: <p style="color:var(--mut)">Synthetic data. Bars show kWh per person and solar readiness by PIN area.</p> -->
+<p style="color:var(--mut)">Live user data. Bars show kWh per person and solar readiness aggregated from real household checks.</p>
 <div class="wrap"><table id="t"><thead><tr><th>Area</th><th>Households</th><th>kWh per person</th><th>Solar readiness</th></tr></thead><tbody></tbody></table></div>
+<div id="admin-viz" style="margin-top:1.2rem"></div>
 <h2>Policy simulator</h2>
 <label>Share of high-slab households moving to 3 kW solar: <b id="p">10</b>%<input id="r" type="range" min="0" max="50" value="10"></label>
-<p>Peak load drops by <span class="out" id="mw"></span> MW and CO₂ falls by <span class="out" id="co"></span> tonnes a year.</p>
+<p>Peak load drops by <span class="out" id="mw">0</span> MW and CO₂ falls by <span class="out" id="co">0</span> tonnes a year.</p>
 <script>
+const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 fetch('/admin-data').then(r=>r.json()).then(({rows,const:c})=>{
-  const mx=Math.max(...rows.map(r=>r.kwh_pp));
-  document.querySelector('tbody').innerHTML=rows.map(r=>`<tr><td>${r.area}<br><small>${r.pin}</small></td><td>${r.households.toLocaleString('en-IN')}</td>
-   <td><div class="cell" style="width:${r.kwh_pp/mx*100}%;background:var(--warn)"></div>${r.kwh_pp}</td><td><div class="cell" style="width:${r.solar_ready}%"></div>${r.solar_ready}</td></tr>`).join('');
-  const tot=rows.reduce((a,r)=>a+r.households,0)*c.slab3_share;
+  const tb = document.querySelector('tbody');
+  if(!rows || rows.length === 0){
+    tb.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:1.8rem;color:var(--mut)">No live user checks recorded yet. Run a bill check from the home screen to see real submissions aggregate here.</td></tr>';
+    document.getElementById('mw').textContent = '0.0';
+    document.getElementById('co').textContent = '0';
+    return;
+  }
+  const mx = Math.max(...rows.map(r=>r.kwh_pp), 1);
+  tb.innerHTML = rows.map(r=>`<tr><td>${esc(r.area)}<br><small>${esc(r.pin)}</small></td><td>${Number(r.households).toLocaleString('en-IN')}</td>
+   <td><div class="cell" style="width:${(r.kwh_pp/mx*100).toFixed(1)}%;background:var(--warn)"></div>${r.kwh_pp}</td><td><div class="cell" style="width:${r.solar_ready}%"></div>${r.solar_ready}%</td></tr>`).join('');
+  const tot = rows.reduce((a,r)=>a+r.households,0)*c.slab3_share;
   const f=()=>{const p=+r.value/100,n=tot*p;document.getElementById('p').textContent=r.value;
     mw.textContent=(n*c.kw*c.peak_coincidence/1000).toFixed(1);co.textContent=Math.round(n*c.kw*c.gen_kwh_per_kw_yr*c.co2_kg_per_kwh/1000).toLocaleString('en-IN')};
-  const r=document.getElementById('r');r.oninput=f;f();});
-</script></main><script src="/static/site.js"></script></body></html>
+  const r=document.getElementById('r');r.oninput=f;f();
+});
+</script></main><script src="/static/site.js?v=9"></script></body></html>
