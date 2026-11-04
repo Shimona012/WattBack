@@ -14,7 +14,8 @@ def expected_kwh(n: int, cdd_val: float) -> float:
     return BASE_KWH * n**SIZE_EXP + COOL_COEF * cdd_val * n**COOL_EXP
 
 def analyze(bill: float, pin: str, members: int, months: int = 1, renter: bool = False, lang: str = "en", verified: bool = False,
-            state: str | None = None, custom: dict | None = None, coords: tuple | None = None) -> dict:
+            state: str | None = None, custom: dict | None = None, coords: tuple | None = None,
+            prev_kwh: float | None = None, prev_score: float | None = None) -> dict:
     if custom:                                   # the person typed their own rates
         t, code, origin = clean_tariff(custom), (state or state_for_pin(pin)), "custom"
     else:
@@ -36,6 +37,20 @@ def analyze(bill: float, pin: str, members: int, months: int = 1, renter: bool =
     slab = {"cliff_kwh": 0, "units_over": 0, "penalty_rs": 0} if est else slab_info(kwh, t)
     exp = expected_kwh(members, c)
     score = round(kwh / exp, 2) if exp else None
+    saves = bool(score and score < 1.0)
+    improved = bool((prev_kwh and kwh < prev_kwh) or (prev_score and score and score < prev_score))
+    rew = reward(score, pin, kwh, verified, improved=improved)
+    why_no_card = None
+    if rew is None:
+        target_kwh = round(exp, 1) if exp else round(kwh * 0.8, 1)
+        why_no_card = {
+            "score": score,
+            "expected_kwh": target_kwh,
+            "actual_kwh": kwh,
+            "excess_kwh": round(max(1.0, kwh - target_kwh), 1),
+            "reason": "Usage is higher than the size & weather baseline and did not improve over previous check."
+        }
+
     return {
         "bill_rs": bill, "months": months, "pin": pin, "tariff": {"state": state_name(code), "regulator": regulator_for(code), "source": origin, "effective": t.get("effective"), "status": "estimate" if est else t.get("status", "unknown")}, "members": members,
         "kwh": kwh, "kwh_per_person": round(kwh / members, 1),
@@ -44,8 +59,10 @@ def analyze(bill: float, pin: str, members: int, months: int = 1, renter: bool =
         "weather": {"cdd": c, "source": wsrc},
         "split_kwh": {"base": round(base - standby, 1), "cooling": round(cooling, 1), "standby": round(standby, 1)},
         "fairness": {"expected_kwh": round(exp, 1), "score": score,
-                     "beats_baseline": bool(score and score < 1.0)},
-        "reward": reward(score, pin, kwh, verified),
+                     "beats_baseline": saves},
+        "improved": improved,
+        "reward": rew,
+        "why_no_card": why_no_card,
         "confidence": "estimate" if est else ("custom" if origin == "custom" else "regulator"), "kwh_range": rng,
         "offer": solar_or_kit(kwh, mbill, renter),
         "nudge": polish(nudge(slab, lang, est), lang), "lang": lang, "verified": verified,

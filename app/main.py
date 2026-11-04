@@ -76,6 +76,8 @@ class Req(BaseModel):
     lat: float | None = Field(default=None, ge=6, le=38)
     lon: float | None = Field(default=None, ge=68, le=98)
     lang: str = Field(default="en", pattern="^(en|hi|gu)$")
+    prev_kwh: float | None = None
+    prev_score: float | None = None
 
 @app.post("/analyze")
 def run(r: Req, request: Request):
@@ -89,14 +91,24 @@ def run(r: Req, request: Request):
         amount, months, verified = b["amount"], b["months"], True
     if not amount:
         raise HTTPException(422, "Enter a bill amount or a 10-digit Consumer ID")
+    # Auto-detect previous check if signed in and not passed by client
+    prev_kwh, prev_score = r.prev_kwh, r.prev_score
+    sub = request.session.get("sub")
+    if prev_kwh is None and sub:
+        prev_items = db.history(sub, 2)
+        if prev_items:
+            prev_kwh = prev_items[-1].get("kwh")
+            prev_score = prev_items[-1].get("score")
+
     try:
         out = analyze(amount, r.pin, r.household_size, months, r.renter, r.lang, verified,
-                      r.state, r.custom, (r.lat, r.lon) if r.lat and r.lon else None)
+                      r.state, r.custom, (r.lat, r.lon) if r.lat and r.lon else None,
+                      prev_kwh=prev_kwh, prev_score=prev_score)
     except (TariffNotLoaded, ValueError) as e:
         raise HTTPException(422, str(e))
     out["bill_source"] = "verified" if verified else "typed"
     # Store check in history (with user sub if signed in, or anonymously to build real community data)
-    db.add_history(request.session.get("sub"), out, pin=r.pin)
+    db.add_history(sub, out, pin=r.pin)
     return out
 
 CLAIMED: set[tuple[str, str]] = set()      # in-memory; use a DB for real (one payout per consumer per month)

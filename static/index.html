@@ -32,7 +32,7 @@ h2{font-size:1.1rem;margin:1.25rem 0 .25rem}
 .prize .pz-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.84rem;font-weight:700;background:var(--field);padding:.2rem .55rem;border-radius:6px;border:1px dashed var(--glass-line);color:var(--ink)}
 #cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;transition:opacity .4s ease;z-index:2;cursor:crosshair}
 .warn{color:var(--warn);font-weight:600}.good{color:var(--acc);font-weight:600}
-</style><meta name="color-scheme" content="light dark"><script>try{var d=document.documentElement,g=function(k,f){try{return localStorage.getItem(k)||f}catch(e){return f}},t=g("wb_theme","auto");if(t!=="auto")d.dataset.theme=t;d.dataset.lights=g("wb_lights","on");d.dataset.size=g("wb_size","md");d.dataset.glass=g("wb_glass","on")}catch(e){}</script><link rel="stylesheet" href="/static/site.css?v=11"></head><body class="home"><main>
+</style><meta name="color-scheme" content="light dark"><script>try{var d=document.documentElement,g=function(k,f){try{return localStorage.getItem(k)||f}catch(e){return f}},t=g("wb_theme","auto");if(t!=="auto")d.dataset.theme=t;d.dataset.lights=g("wb_lights","on");d.dataset.size=g("wb_size","md");d.dataset.glass=g("wb_glass","on")}catch(e){}</script><link rel="stylesheet" href="/static/site.css?v=12"></head><body class="home"><main>
 <header><h1 class="mark">WattBack</h1><p class="tag">The light of an idea</p></header>
 <p class="sub">Enter your bill amount. We work out the units, the slab trap, and how you compare for a home your size. <button type="button" class="lnk open-help" style="display:inline-flex;align-items:center;gap:.25rem;font-size:.86rem;color:var(--acc);vertical-align:baseline;padding:0 .25rem;background:none;border:0;cursor:pointer;font-weight:600">Need help?</button></p>
 <form id="f">
@@ -90,11 +90,31 @@ $('#f').onsubmit=async e=>{
   e.preventDefault();
   const d=new FormData(e.target);
   let custom=null;try{custom=customRates()}catch(err){$('#out').textContent=err.message;return}
+  const prevKwh = parseFloat(localStorage.getItem('wb_last_kwh') || '');
+  const prevScore = parseFloat(localStorage.getItem('wb_last_score') || '');
   const res=await fetch('/analyze',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({state:d.get('state')||null,custom,lat:window.COORDS?window.COORDS[0]:null,lon:window.COORDS?window.COORDS[1]:null,bill_amount:+d.get('bill')||null,consumer_id:d.get('cid')||null,pin:d.get('pin'),household_size:+d.get('n'),billing_months:+d.get('days'),renter:d.get('renter')==='on',lang:d.get('lang')})});
+    body:JSON.stringify({state:d.get('state')||null,custom,lat:window.COORDS?window.COORDS[0]:null,lon:window.COORDS?window.COORDS[1]:null,bill_amount:+d.get('bill')||null,consumer_id:d.get('cid')||null,pin:d.get('pin'),household_size:+d.get('n'),billing_months:+d.get('days'),renter:d.get('renter')==='on',lang:d.get('lang'),prev_kwh:!isNaN(prevKwh)?prevKwh:null,prev_score:!isNaN(prevScore)?prevScore:null})});
   window.CID=d.get('cid')||null;
   if(!res.ok){const j=await res.json().catch(()=>({}));$('#out').textContent=typeof j.detail==='string'?j.detail:'Check your inputs: bill above 0, 6-digit PIN, 1 to 15 people.';return}
   const r=await res.json(),s=r.split_kwh,t=r.kwh,f=r.fairness,sl=r.slab;
+  localStorage.setItem('wb_last_kwh', r.kwh);
+  if(r.fairness && r.fairness.score) localStorage.setItem('wb_last_score', r.fairness.score);
+  let checkCount = Number(localStorage.getItem('wb_check_count') || '0') + 1;
+  localStorage.setItem('wb_check_count', checkCount);
+  if(r.reward && r.reward.code){
+    let vault = JSON.parse(localStorage.getItem('wb_rewards_vault') || '[]');
+    vault.unshift({
+      code: r.reward.code,
+      label: r.reward.label,
+      tier: r.reward.tier,
+      date: new Date().toLocaleDateString('en-IN', {month:'short', day:'numeric', year:'numeric'}),
+      kwh: r.kwh,
+      score: r.fairness ? r.fairness.score : null
+    });
+    const seen = new Set();
+    vault = vault.filter(x => seen.has(x.code) ? false : seen.add(x.code));
+    localStorage.setItem('wb_rewards_vault', JSON.stringify(vault));
+  }
   const pct=v=>(v/t*100).toFixed(1)+'%';
   const c=2*Math.PI*38;
   const pBase=(s.base/t)*c, pCool=(s.cooling/t)*c, pStby=(s.standby/t)*c;
@@ -259,36 +279,142 @@ function showInstallerModal(r){
   document.getElementById('ins-proceed-btn').onclick = () => d.close ? d.close() : d.removeAttribute('open');
 }
 
+function confettiBurst(){
+  const cv=document.createElement('canvas');
+  cv.style.cssText='position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:99999;';
+  cv.width=window.innerWidth;cv.height=window.innerHeight;
+  document.body.appendChild(cv);
+  const ctx=cv.getContext('2d');
+  const colors=['#3ec9ae','#0b7a68','#f5b041','#5dade2','#ffffff','#ff8a5c'];
+  const particles=Array.from({length:55},()=>({
+    x:window.innerWidth/2,
+    y:window.innerHeight/2-50,
+    vx:(Math.random()-0.5)*14,
+    vy:(Math.random()-0.8)*16,
+    size:Math.random()*6+3,
+    color:colors[Math.floor(Math.random()*colors.length)],
+    alpha:1,
+    spin:Math.random()*10
+  }));
+  let frame=0;
+  function loop(){
+    ctx.clearRect(0,0,cv.width,cv.height);
+    let alive=false;
+    particles.forEach(p=>{
+      p.x+=p.vx;p.y+=p.vy;p.vy+=0.4;p.alpha-=0.016;
+      if(p.alpha>0){
+        alive=true;
+        ctx.save();
+        ctx.globalAlpha=p.alpha;
+        ctx.fillStyle=p.color;
+        ctx.translate(p.x,p.y);
+        ctx.rotate(p.spin);
+        ctx.fillRect(-p.size/2,-p.size/2,p.size,p.size);
+        ctx.restore();
+      }
+    });
+    if(alive&&frame++<80)requestAnimationFrame(loop);
+    else cv.remove();
+  }
+  loop();
+}
+
 function extras(r){
   window.WB_CONTEXT=`State ${r.tariff.state}, rates ${r.tariff.source}/${r.confidence}. About ${r.kwh} units a month for ${r.members} people (${r.kwh_per_person} each). Score ${r.fairness.score}. Units over top slab: ${r.slab.units_over}.`;
   if(r.confidence==='estimate')['slabp','fairp'].forEach(i=>setTimeout(()=>{const e=document.getElementById(i);e&&e.remove()}));
   const o=r.offer,x=$('#extras');
-  const card=r.reward?`
-  <div class="sc-card">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.45rem">
-      <h2 style="margin:0;font-size:1.15rem;display:flex;align-items:center;gap:.45rem;color:var(--ink)">
-        <span>🎁</span> <span>Your Scratch Card</span>
-      </h2>
-      <span style="font-size:.78rem;padding:.2rem .6rem;border-radius:12px;background:rgba(62,201,174,.15);color:var(--acc);font-weight:700;border:1px solid rgba(62,201,174,.3)">${esc(r.reward.tier || 'Reward')}</span>
+  const f=r.fairness;
+  const checkCount = Number(localStorage.getItem('wb_check_count') || '1');
+
+  // Milestone Progress Box (Unlocks permanent Profile Vault after 3 bills)
+  const milestoneHtml = checkCount < 3 ? `
+  <div class="milestone-box" style="margin:1.1rem 0;padding:.85rem 1rem;background:var(--field);border-radius:var(--r-i);border:1px solid var(--glass-line)">
+    <div style="display:flex;justify-content:space-between;align-items:center;font-size:.84rem;font-weight:700;margin-bottom:.4rem">
+      <span style="display:flex;align-items:center;gap:.35rem"><span>🎯</span> <b>Profile Rewards Vault Milestone</b></span>
+      <b style="color:var(--acc)">${checkCount} / 3 bills analyzed</b>
     </div>
-    <p style="margin:0 0 .75rem;font-size:.88rem;color:var(--mut)">Scratch the metallic foil below with your mouse or finger to reveal your reward!</p>
-    <div class="sc">
-      <div class="prize">
-        <div class="pz-tier">🎉 ${esc(r.reward.tier || 'ENERGY REWARD')}</div>
-        <div class="pz-label">${esc(r.reward.label)}</div>
-        <div class="pz-code">Code: <b>${esc(r.reward.code || 'WB-ENERGY26')}</b></div>
-        <small style="color:var(--mut);font-size:.76rem;margin-top:.15rem">${r.reward.preview_only ? 'Demo preview · Add Consumer ID to unlock live utility redemption' : 'Verified bill reward ready to claim!'}</small>
+    <div style="height:8px;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden;margin-bottom:.4rem">
+      <div style="width:${(checkCount / 3 * 100)}%;background:linear-gradient(90deg,var(--neon),var(--acc));height:100%;transition:width .6s ease"></div>
+    </div>
+    <small style="color:var(--mut);font-size:.78rem">Analyze ${3 - checkCount} more bill(s) to unlock your permanent Profile Rewards Vault where all your vouchers and rewards get stored.</small>
+  </div>` : `
+  <div class="milestone-box unlocked" style="margin:1.1rem 0;padding:.85rem 1rem;background:linear-gradient(135deg,rgba(11,122,104,.18),rgba(62,201,174,.08));border-radius:var(--r-i);border:1px solid rgba(62,201,174,.35)">
+    <div style="display:flex;justify-content:space-between;align-items:center;font-size:.85rem;font-weight:800;color:var(--acc);margin-bottom:.25rem">
+      <span style="display:flex;align-items:center;gap:.35rem"><span>🏆</span> <b>Profile Rewards Vault Unlocked!</b></span>
+      <span style="font-size:.74rem;background:var(--acc);color:var(--on-acc);padding:.15rem .5rem;border-radius:10px;font-weight:700">3+ Bills Audited</span>
+    </div>
+    <p style="margin:0;font-size:.82rem;color:var(--ink);line-height:1.45">
+      Congratulations! You have analyzed 3+ bills. All your earned vouchers and scratch cards are now safely stored in your <b>Profile Rewards Vault</b>.
+    </p>
+  </div>`;
+
+  let card = '';
+  if(r.reward){
+    card = `
+    <div class="sc-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.45rem">
+        <h2 style="margin:0;font-size:1.15rem;display:flex;align-items:center;gap:.45rem;color:var(--ink)">
+          <span>🎁</span> <span>Your Scratch Card</span>
+        </h2>
+        <span style="font-size:.78rem;padding:.2rem .6rem;border-radius:12px;background:rgba(62,201,174,.15);color:var(--acc);font-weight:700;border:1px solid rgba(62,201,174,.3)">${esc(r.reward.tier || 'Reward')}</span>
       </div>
-      <canvas id="cv" width="340" height="135" aria-label="Scratch to reveal"></canvas>
-    </div>
-    <div style="margin-top:.65rem;display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap">
-      ${r.reward.preview_only
-        ? `<small style="color:var(--mut);flex:1">Preview mode: enter your 10-digit Consumer ID above to unlock real utility credits.</small>`
-        : `<p class="good" style="margin:0;flex:1">Verified bill credit unlocked!</p><button type="button" id="claim" style="padding:.5rem 1.2rem">Claim reward</button>`
-      }
-      <button type="button" id="copy-reward-btn" class="ghost" style="display:none;padding:.4rem .85rem;font-size:.82rem;font-weight:600">Copy Voucher</button>
-    </div>
-  </div>` : '';
+      <p style="margin:0 0 .75rem;font-size:.88rem;color:var(--mut)">Scratch the metallic foil below with your mouse or finger to reveal your reward!</p>
+      <div class="sc">
+        <div class="prize">
+          <div class="pz-tier">🎉 ${esc(r.reward.tier || 'ENERGY REWARD')}</div>
+          <div class="pz-label">${esc(r.reward.label)}</div>
+          <div class="pz-code">Code: <b>${esc(r.reward.code || 'WB-ENERGY26')}</b></div>
+          <small style="color:var(--mut);font-size:.76rem;margin-top:.15rem">${r.reward.preview_only ? 'Demo preview · Add Consumer ID to unlock live utility redemption' : 'Verified bill reward ready to claim!'}</small>
+        </div>
+        <canvas id="cv" width="340" height="135" aria-label="Scratch to reveal"></canvas>
+      </div>
+      <div style="margin-top:.65rem;display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap">
+        ${r.reward.preview_only
+          ? `<small style="color:var(--mut);flex:1">Preview mode: enter your 10-digit Consumer ID above to unlock real utility credits.</small>`
+          : `<p class="good" style="margin:0;flex:1">Verified bill credit unlocked!</p><button type="button" id="claim" style="padding:.5rem 1.2rem">Claim reward</button>`
+        }
+        <button type="button" id="copy-reward-btn" class="ghost" style="display:none;padding:.4rem .85rem;font-size:.82rem;font-weight:600">Copy Voucher</button>
+      </div>
+      <div class="partner-note" style="margin-top:.85rem;padding-top:.55rem;border-top:1px solid var(--glass-line);font-size:.76rem;color:var(--mut);line-height:1.45">
+        <span>ℹ️ <b>Transparency Notice:</b> WattBack is an independent citizen engagement project built for HackCult '26. We are <b>not yet officially partnered with or sponsored by any appliance brand, commercial vendor, or DISCOM</b>. All scratch cards and vouchers illustrate a gamified utility reward model.</span>
+      </div>
+    </div>`;
+  } else {
+    // Motivating card explaining why no scratch card was awarded and how to unlock
+    const excess = Math.round(Math.max(1, r.kwh - f.expected_kwh));
+    card = `
+    <div class="sc-card no-reward-card" style="border-left:3px solid var(--warn)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
+        <h2 style="margin:0;font-size:1.15rem;display:flex;align-items:center;gap:.45rem;color:var(--warn)">
+          <span>🔒</span> <span>Scratch Card Locked This Month</span>
+        </h2>
+        <span style="font-size:.78rem;padding:.2rem .6rem;border-radius:12px;background:rgba(255,138,92,.15);color:var(--warn);font-weight:700;border:1px solid rgba(255,138,92,.3)">Higher than expected</span>
+      </div>
+      <p style="margin:0 0 .75rem;font-size:.9rem;color:var(--ink);line-height:1.55">
+        <b>Why didn't you receive a scratch card?</b><br>
+        Scratch cards are awarded exclusively when your home <b>saves energy</b> (beating the expected size &amp; weather baseline of ${f.expected_kwh} units) or <b>improves efficiency</b> compared to your previous bill check.
+      </p>
+      <div style="background:var(--field);padding:.85rem 1rem;border-radius:var(--r-i);border:1px solid var(--glass-line);margin-bottom:.85rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem;font-size:.84rem">
+          <span>Your consumption: <b>${r.kwh} units</b></span>
+          <span>Baseline target: <b>${f.expected_kwh} units</b></span>
+        </div>
+        <div style="font-size:.82rem;color:var(--warn);font-weight:600;margin-bottom:.5rem">
+          &bull; Current use is ${excess} units above baseline (Fairness Score: ${f.score}).
+        </div>
+        <div style="font-size:.82rem;color:var(--mut);line-height:1.5">
+          <b>💡 How to unlock on your next check:</b><br>
+          1. Set your AC cooling to <b>24°C</b> with ceiling fans to cut cooling degree-day waste.<br>
+          2. Unplug standby appliances to save 10% base load.<br>
+          3. Save ~<b>${excess} units</b> or beat your previous record on your next bill check to unlock your scratch card!
+        </div>
+      </div>
+      <div class="partner-note" style="font-size:.76rem;color:var(--mut);line-height:1.45;border-top:1px solid var(--glass-line);padding-top:.5rem">
+        <span>ℹ️ <b>Transparency Notice:</b> WattBack is an independent citizen engagement project built for HackCult '26. We are <b>not yet officially partnered with any appliance brand, commercial vendor, or DISCOM</b>.</span>
+      </div>
+    </div>`;
+  }
+
   const offer=o.type==='solar'?`<h2>Rooftop solar for you</h2>
     <div class="row"><span>Size</span><b>${o.kw} kW (${o.roof_sqft} sq ft roof)</b></div>
     <div class="row"><span>Cost before subsidy</span><b>₹${o.gross.toLocaleString('en-IN')}</b></div>
@@ -297,7 +423,7 @@ function extras(r){
     <p class="${o.monthly_saving>0?'good':'warn'}">Loan of ₹${o.emi.toLocaleString('en-IN')} a month, against a bill of about ₹${Math.round(r.bill_rs/r.months).toLocaleString('en-IN')}: ${o.monthly_saving>0?'you keep':'you lose'} ₹${Math.abs(o.monthly_saving).toLocaleString('en-IN')} a month.</p>
     <button type="button" id="lead">Ask installers to call me</button>`
     :`<h2>For renters</h2><p>${esc(o.items.join(' and '))} move with you. Estimated saving: about ₹${o.est_saving_rs} a month.</p>`;
-  x.innerHTML=`<h2>Tip</h2><p>${esc(r.nudge)}</p><button type="button" id="say">Read it aloud</button>`+card+offer+'<h2>Neighbourhood ranking</h2><div id="lb"></div>';
+  x.innerHTML=`<h2>Tip</h2><p>${esc(r.nudge)}</p><button type="button" id="say">Read it aloud</button>`+milestoneHtml+card+offer+'<h2>Neighbourhood ranking</h2><div id="lb"></div>';
   $('#say').onclick=()=>{const u=new SpeechSynthesisUtterance(r.nudge);u.lang={en:'en-IN',hi:'hi-IN',gu:'gu-IN'}[r.lang];
     if(!speechSynthesis.getVoices().some(v=>v.lang.startsWith(r.lang)))alert('No '+r.lang+' voice on this device. Try Chrome on Android or install a voice.');speechSynthesis.speak(u)};
   const lead=$('#lead');if(lead)lead.onclick=()=>showInstallerModal(r);
@@ -378,6 +504,7 @@ function scratch(){
       c.style.pointerEvents='none';
       const cpBtn=document.getElementById('copy-reward-btn');
       if(cpBtn) cpBtn.style.display='inline-flex';
+      confettiBurst();
     }
   };
 
@@ -393,4 +520,4 @@ function scratch(){
   };
   c.onpointercancel=()=>{down=false};
 }
-</script></main><script src="/static/site.js?v=11"></script></body></html>
+</script></main><script src="/static/site.js?v=12"></script></body></html>

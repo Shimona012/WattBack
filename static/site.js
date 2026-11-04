@@ -12,7 +12,7 @@ function applyPrefs(){const g=(k,f)=>S.get(k)||f,t=g('wb_theme','auto');
   if(t==='auto')delete R.dataset.theme;else R.dataset.theme=t;
   R.dataset.lights=g('wb_lights','on');R.dataset.size=g('wb_size','md');R.dataset.glass=g('wb_glass','on')}
 safe('prefs',applyPrefs);
-if(!document.querySelector('link[href*="/static/site.css"]')){const L=document.createElement('link');L.rel='stylesheet';L.href='/static/site.css?v=11';document.head.appendChild(L)}
+if(!document.querySelector('link[href*="/static/site.css"]')){const L=document.createElement('link');L.rel='stylesheet';L.href='/static/site.css?v=12';document.head.appendChild(L)}
 
 // ---------- navigation & slide-over drawer on LEFT ----------
 let nav, mn, bd, setDrawerOpen;
@@ -352,8 +352,47 @@ async function insights(){
     </div>`;
   }
 
+  const localVault = JSON.parse(localStorage.getItem('wb_rewards_vault') || '[]');
+  const checkCount = Math.max(d.checks || 0, Number(localStorage.getItem('wb_check_count') || '0'));
+  
+  let vaultHtml = '';
+  if(checkCount < 3){
+    vaultHtml = `
+    <div style="margin:1rem 0;padding:.9rem 1rem;background:var(--field);border-radius:var(--r-i);border:1px solid var(--glass-line);text-align:center">
+      <div style="font-size:1.5rem;margin-bottom:.2rem">🔒</div>
+      <b style="color:var(--ink);font-size:.92rem">Profile Rewards Vault (Locked)</b>
+      <p style="font-size:.8rem;color:var(--mut);margin:.3rem 0 .5rem">Analyze 3 bills to unlock your permanent rewards vault where all earned scratch card vouchers are stored.</p>
+      <div style="font-size:.82rem;font-weight:700;color:var(--acc)">Progress: ${checkCount} / 3 bills analyzed</div>
+    </div>`;
+  } else {
+    vaultHtml = `
+    <div style="margin:1rem 0;padding:1rem;background:var(--field);border-radius:var(--r-i);border:1px solid var(--glass-line)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem">
+        <b style="color:var(--acc);font-size:.92rem;display:flex;align-items:center;gap:.35rem">
+          <span>🏆</span> Profile Rewards Vault
+        </b>
+        <span style="font-size:.74rem;background:rgba(62,201,174,.15);color:var(--acc);padding:.15rem .5rem;border-radius:10px;font-weight:700">Unlocked</span>
+      </div>
+      ${localVault.length ? localVault.map(v => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:.55rem .75rem;background:var(--card);border-radius:8px;border:1px solid var(--glass-line);margin-bottom:.4rem">
+          <div>
+            <b style="font-size:.86rem;color:var(--ink)">${esc(v.label)}</b><br>
+            <small style="color:var(--mut);font-size:.74rem">${esc(v.tier)} · ${esc(v.date)}</small>
+          </div>
+          <div style="text-align:right">
+            <span style="font-family:monospace;font-size:.82rem;font-weight:700;color:var(--acc);background:var(--field);padding:.18rem .45rem;border-radius:4px;border:1px dashed var(--glass-line)">${esc(v.code)}</span>
+          </div>
+        </div>
+      `).join('') : '<p style="font-size:.8rem;color:var(--mut);margin:0">No vouchers earned yet. Save energy or improve on your next bill to earn scratch cards!</p>'}
+      <div style="margin-top:.55rem;font-size:.72rem;color:var(--mut);line-height:1.4">
+        <i>Notice: WattBack is an independent citizen engagement prototype. We are not yet partnered with any company; all vouchers are demonstrative.</i>
+      </div>
+    </div>`;
+  }
+
   dlg.innerHTML='<h3>Your insights</h3><p>'+d.checks+' saved check(s)</p>'+
    trendSvg +
+   vaultHtml +
    d.tips.map(t=>'<p><b>'+esc(t.title)+'.</b> '+esc(t.text)+'</p>').join('')+
    '<div class="acts"><button id="ic" type="button">Close</button><button id="idl" type="button" class="ghost">Delete my data</button></div>';
   openDlg(dlg);$('#ic').onclick=()=>closeDlg(dlg);

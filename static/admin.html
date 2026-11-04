@@ -6,7 +6,7 @@ body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,sans
 main{width:min(720px,100%)}h1{margin:0 0 .25rem;letter-spacing:-.02em}table{width:100%;border-collapse:collapse;background:var(--card)}
 th,td{text-align:left;padding:.6rem;border-bottom:1px solid var(--line)}.cell{height:10px;border-radius:5px;background:var(--acc)}
 input[type=range]{width:100%}.out{font-size:1.4rem;font-weight:700}.wrap{overflow-x:auto}
-</style><meta name="color-scheme" content="light dark"><script>try{var d=document.documentElement,g=function(k,f){try{return localStorage.getItem(k)||f}catch(e){return f}},t=g("wb_theme","auto");if(t!=="auto")d.dataset.theme=t;d.dataset.lights=g("wb_lights","on");d.dataset.size=g("wb_size","md");d.dataset.glass=g("wb_glass","on")}catch(e){}</script><link rel="stylesheet" href="/static/site.css?v=11"></head><body><main>
+</style><meta name="color-scheme" content="light dark"><script>try{var d=document.documentElement,g=function(k,f){try{return localStorage.getItem(k)||f}catch(e){return f}},t=g("wb_theme","auto");if(t!=="auto")d.dataset.theme=t;d.dataset.lights=g("wb_lights","on");d.dataset.size=g("wb_size","md");d.dataset.glass=g("wb_glass","on")}catch(e){}</script><link rel="stylesheet" href="/static/site.css?v=12"></head><body><main>
 <h1>Gujarat energy command view</h1>
 <!-- Test synthetic dummy data note commented for testing: <p style="color:var(--mut)">Synthetic data. Bars show kWh per person and solar readiness by PIN area.</p> -->
 <p style="color:var(--mut)">Live user data. Bars show kWh per person and solar readiness aggregated from real household checks.</p>
@@ -33,4 +33,4 @@ fetch('/admin-data').then(r=>r.json()).then(({rows,const:c})=>{
     mw.textContent=(n*c.kw*c.peak_coincidence/1000).toFixed(1);co.textContent=Math.round(n*c.kw*c.gen_kwh_per_kw_yr*c.co2_kg_per_kwh/1000).toLocaleString('en-IN')};
   const r=document.getElementById('r');r.oninput=f;f();
 });
-</script></main><script src="/static/site.js?v=11"></script></body></html>
+</script></main><script src="/static/site.js?v=12"></script></body></html>

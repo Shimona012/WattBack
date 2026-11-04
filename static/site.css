@@ -470,3 +470,10 @@ footer.site .fine{max-width:1000px;margin:1.2rem auto 0;padding-top:.9rem;border
 .prize .pz-label{font-size:1.3rem;font-weight:800;color:var(--ink);line-height:1.2}
 .prize .pz-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.84rem;font-weight:700;background:var(--field);padding:.2rem .55rem;border-radius:6px;border:1px dashed var(--glass-line);color:var(--ink)}
 #cv{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;touch-action:none!important;transition:opacity .4s ease;z-index:2!important;cursor:crosshair}
+
+
+/* Milestone Box & Rewards Vault */
+.milestone-box{transition:all .3s ease;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.milestone-box.unlocked{box-shadow:0 0 16px rgba(62,201,174,.25);border-color:rgba(62,201,174,.4)!important}
+.no-reward-card{border-left:4px solid var(--warn)!important}
+.partner-note{font-size:.75rem;color:var(--mut);line-height:1.45}

@@ -19,19 +19,23 @@ def solar_or_kit(monthly_kwh: float, monthly_bill: float, renter: bool) -> dict:
             "subsidy": sub, "net": net, "emi": emi, "monthly_saving": round(monthly_bill - emi),
             "vendors": ["Vendor A (placeholder)", "Vendor B (placeholder)", "Vendor C (placeholder)"]}
 
-def reward(score, pin: str, kwh: float, verified: bool = False):
+def reward(score, pin: str, kwh: float, verified: bool = False, improved: bool = False):
     """Scratch-card prize for citizen energy engagement (Mission LiFE / GEDA).
-    Households beating their baseline earn higher cashbacks/fan rebates;
-    others earn eco-action vouchers and energy-saving coupons to encourage reduction."""
-    if score is not None and score < 0.8:
+    Households ONLY unlock a scratch card if they save (score < 1.0) or improve over their previous bill.
+    If usage is higher than expected and hasn't improved, no card is awarded."""
+    saves = score is not None and score < 1.0
+    if not (saves or improved):
+        return None
+
+    if improved and not saves:
+        pool = ["₹75 off a BLDC fan", "₹50 Energy Improver Rebate", "Free 7W LED Kit", "Smart Plug Voucher"]
+        tier = "Efficiency Improver"
+    elif score is not None and score < 0.8:
         pool = ["₹100 off a BLDC fan", "₹50 bill cashback", "₹150 Solar Inverter Voucher", "Free 7W LED Kit"]
         tier = "Super Saver"
-    elif score is not None and score < 1.0:
+    else:
         pool = ["₹50 bill cashback", "LED bulb voucher", "₹75 Smart Power Plug", "₹100 Heat Pump Rebate"]
         tier = "Efficient Home"
-    else:
-        pool = ["₹50 off a BLDC fan", "₹50 Energy Saver Voucher", "Free LED Bulb Voucher", "₹100 Solar Assessment Rebate"]
-        tier = "Mission LiFE Saver"
 
     h = int(hashlib.sha256(f"{pin}{kwh}".encode()).hexdigest(), 16)   # deterministic: no re-rolling
     code = f"WB-{h % 90000 + 10000}"
@@ -40,7 +44,8 @@ def reward(score, pin: str, kwh: float, verified: bool = False):
         "tier": tier,
         "code": code,
         "preview_only": not verified,
-        "unlocked": bool(score and score < 1.0)
+        "improved": improved,
+        "unlocked": True
     }
 
 NUDGE = {   # have a native speaker review hi/gu before the demo
