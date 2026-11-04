@@ -1,8 +1,15 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Contact us - WattBack</title>
-<style>body{margin:0;background:var(--bg,#f1f5f7);display:grid;place-items:start center;padding:2rem 1rem;min-height:100vh}</style><meta name="color-scheme" content="light dark"><script>try{var d=document.documentElement,g=function(k,f){try{return localStorage.getItem(k)||f}catch(e){return f}},t=g("wb_theme","auto");if(t!=="auto")d.dataset.theme=t;d.dataset.lights=g("wb_lights","on");d.dataset.size=g("wb_size","md");d.dataset.glass=g("wb_glass","on")}catch(e){}</script><link rel="stylesheet" href="/static/site.css?v=9"></head>
+<style>body{margin:0;background:var(--bg,#f1f5f7);display:grid;place-items:start center;padding:2rem 1rem;min-height:100vh}</style><meta name="color-scheme" content="light dark"><script>try{var d=document.documentElement,g=function(k,f){try{return localStorage.getItem(k)||f}catch(e){return f}},t=g("wb_theme","auto");if(t!=="auto")d.dataset.theme=t;d.dataset.lights=g("wb_lights","on");d.dataset.size=g("wb_size","md");d.dataset.glass=g("wb_glass","on")}catch(e){}</script><link rel="stylesheet" href="/static/site.css?v=10"></head>
 <body><main class="page"><h1>Contact us</h1><p>Questions, corrections to a tariff, or feedback? Send a note and we will read it.</p>
-<form id="cf"><label>Name<input name="name" required maxlength="80"></label><label>Email<input name="email" type="email" required maxlength="120"></label>
-<label>Message<textarea name="message" rows="5" required minlength="5" maxlength="2000"></textarea></label><button id="sbtn">Send</button> <span id="cs" role="status"></span></form>
+<form id="cf">
+  <label>Name<input name="name" required maxlength="80" placeholder="Your name"></label>
+  <label>Email<input name="email" type="email" required maxlength="120" placeholder="your.email@example.com"></label>
+  <label>Message<textarea name="message" rows="5" required minlength="5" maxlength="2000" placeholder="Write your message or question here..."></textarea></label>
+  <div style="display:flex;align-items:center;gap:1.2rem;margin-top:.4rem">
+    <button id="sbtn" type="submit">Send message</button>
+    <span id="cs" role="status" style="font-weight:600;font-size:.9rem;color:var(--acc)"></span>
+  </div>
+</form>
 <script>
 function loadScript(src){
   return new Promise((res,rej)=>{
@@ -72,4 +79,4 @@ document.getElementById('cf').onsubmit = async e => {
     btn.disabled = false;
   }
 };
-</script></main><script src="/static/site.js?v=9"></script></body></html>
+</script></main><script src="/static/site.js?v=10"></script></body></html>
