@@ -15,7 +15,7 @@ def expected_kwh(n: int, cdd_val: float) -> float:
 
 def analyze(bill: float, pin: str, members: int, months: int = 1, renter: bool = False, lang: str = "en", verified: bool = False,
             state: str | None = None, custom: dict | None = None, coords: tuple | None = None,
-            prev_kwh: float | None = None, prev_score: float | None = None) -> dict:
+            prev_kwh: float | None = None, prev_score: float | None = None, prev_bill: float | None = None) -> dict:
     if custom:                                   # the person typed their own rates
         t, code, origin = clean_tariff(custom), (state or state_for_pin(pin)), "custom"
     else:
@@ -38,18 +38,38 @@ def analyze(bill: float, pin: str, members: int, months: int = 1, renter: bool =
     exp = expected_kwh(members, c)
     score = round(kwh / exp, 2) if exp else None
     saves = bool(score and score < 1.0)
-    improved = bool((prev_kwh and kwh < prev_kwh) or (prev_score and score and score < prev_score))
-    rew = reward(score, pin, kwh, verified, improved=improved)
+    is_duplicate = bool(prev_bill is not None and abs(bill - prev_bill) < 2.0)
+    improved = bool(not is_duplicate and ((prev_kwh and kwh < prev_kwh) or (prev_score and score and score < prev_score)))
+    
+    warnings = []
+    if bill > 40000 or (bill / members > 12000):
+        warnings.append(f"Unusually high bill (₹{bill:,.0f} for {members} people). Please double-check you didn't add an extra zero or include commercial heavy machinery.")
+    elif bill < 60 and members >= 2:
+        warnings.append(f"Unusually low bill (₹{bill:,.0f}). Make sure you entered your bill total in rupees, not units.")
+    if members > 12:
+        warnings.append(f"Large household headcount ({members} people). Benchmarks reflect a large joint household.")
+
     why_no_card = None
-    if rew is None:
-        target_kwh = round(exp, 1) if exp else round(kwh * 0.8, 1)
+    if is_duplicate:
+        rew = None
         why_no_card = {
             "score": score,
-            "expected_kwh": target_kwh,
+            "expected_kwh": round(exp, 1) if exp else None,
             "actual_kwh": kwh,
-            "excess_kwh": round(max(1.0, kwh - target_kwh), 1),
-            "reason": "Usage is higher than the size & weather baseline and did not improve over previous check."
+            "reason": f"Duplicate bill detected (₹{bill:,.0f}). You have already checked this bill amount recently. Multiple checks of the exact same bill cannot farm repeated rewards. Check your next monthly bill to earn new rewards!",
+            "is_duplicate": True
         }
+    else:
+        rew = reward(score, pin, kwh, verified, improved=improved)
+        if rew is None:
+            target_kwh = round(exp, 1) if exp else round(kwh * 0.8, 1)
+            why_no_card = {
+                "score": score,
+                "expected_kwh": target_kwh,
+                "actual_kwh": kwh,
+                "excess_kwh": round(max(1.0, kwh - target_kwh), 1),
+                "reason": "Usage is higher than the size & weather baseline and did not improve over previous check."
+            }
 
     return {
         "bill_rs": bill, "months": months, "pin": pin, "tariff": {"state": state_name(code), "regulator": regulator_for(code), "source": origin, "effective": t.get("effective"), "status": "estimate" if est else t.get("status", "unknown")}, "members": members,
@@ -61,6 +81,8 @@ def analyze(bill: float, pin: str, members: int, months: int = 1, renter: bool =
         "fairness": {"expected_kwh": round(exp, 1), "score": score,
                      "beats_baseline": saves},
         "improved": improved,
+        "is_duplicate": is_duplicate,
+        "warnings": warnings,
         "reward": rew,
         "why_no_card": why_no_card,
         "confidence": "estimate" if est else ("custom" if origin == "custom" else "regulator"), "kwh_range": rng,

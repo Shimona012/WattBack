@@ -12,7 +12,7 @@ function applyPrefs(){const g=(k,f)=>S.get(k)||f,t=g('wb_theme','auto');
   if(t==='auto')delete R.dataset.theme;else R.dataset.theme=t;
   R.dataset.lights=g('wb_lights','on');R.dataset.size=g('wb_size','md');R.dataset.glass=g('wb_glass','on')}
 safe('prefs',applyPrefs);
-if(!document.querySelector('link[href*="/static/site.css"]')){const L=document.createElement('link');L.rel='stylesheet';L.href='/static/site.css?v=12';document.head.appendChild(L)}
+if(!document.querySelector('link[href*="/static/site.css"]')){const L=document.createElement('link');L.rel='stylesheet';L.href='/static/site.css?v=13';document.head.appendChild(L)}
 
 // ---------- navigation & slide-over drawer on LEFT ----------
 let nav, mn, bd, setDrawerOpen;
@@ -60,6 +60,7 @@ safe('nav',()=>{
   '</div>' +
   '<div class="mn-links">' +
     '<a href="/">Check my bill</a>' +
+    '<button class="lnk" id="mn-vault-btn" type="button" style="display:flex;align-items:center;justify-content:space-between;width:100%"><span id="mn-vault-txt">🔒 Rewards Vault (0/3)</span></button>' +
     '<a href="/admin">GEDA view</a>' +
     '<a href="/about">About</a>' +
     '<a href="/contact">Contact</a>' +
@@ -80,10 +81,108 @@ safe('nav',()=>{
   });
 
   const mb = $('#mb');
-  if(mb) mb.onclick = () => setDrawerOpen(!document.body.classList.contains('mn-open'));
+  if(mb) mb.onclick = () => {
+    if (window.updateVaultBtn) window.updateVaultBtn();
+    setDrawerOpen(!document.body.classList.contains('mn-open'));
+  };
   bd.onclick = () => setDrawerOpen(false);
   const mc = $('#mn-cls');
   if(mc) mc.onclick = () => setDrawerOpen(false);
+
+  window.updateVaultBtn = function() {
+    const vTxt = document.getElementById('mn-vault-txt');
+    if (!vTxt) return;
+    const count = Number(localStorage.getItem('wb_check_count') || '0');
+    if (count < 3) {
+      vTxt.innerHTML = `🔒 Rewards Vault (${count}/3)`;
+    } else {
+      const vault = JSON.parse(localStorage.getItem('wb_rewards_vault') || '[]');
+      vTxt.innerHTML = `🎁 Rewards Vault (${vault.length})`;
+    }
+  };
+  window.updateVaultBtn();
+
+  function openVaultModal() {
+    let dlg = document.getElementById('vault-dlg');
+    if (!dlg) {
+      dlg = document.createElement('dialog');
+      dlg.id = 'vault-dlg';
+      dlg.className = 'dlg';
+      document.body.appendChild(dlg);
+    }
+    const checkCount = Number(localStorage.getItem('wb_check_count') || '0');
+    const localVault = JSON.parse(localStorage.getItem('wb_rewards_vault') || '[]');
+
+    if (checkCount < 3) {
+      dlg.innerHTML = `
+        <div class="chead">
+          <b>Profile Rewards Vault</b>
+          <button id="v-cls" type="button" class="ghost" style="border:0!important;font-size:1.4rem;padding:0 .4rem;cursor:pointer">&times;</button>
+        </div>
+        <div style="text-align:center;padding:1.4rem 1rem">
+          <div style="font-size:2.6rem;margin-bottom:.3rem">🔒</div>
+          <h3 style="margin:0 0 .4rem;color:var(--ink)">Rewards Vault Locked</h3>
+          <p style="color:var(--mut);font-size:.88rem;line-height:1.55;max-width:380px;margin:0 auto .8rem">
+            You have analyzed <b>${checkCount} of 3</b> required bills. Audit 3 distinct bills to unlock your permanent Profile Rewards Vault and access all earned scratch cards &amp; discount vouchers!
+          </p>
+          <div style="margin:1rem auto;max-width:280px;height:10px;background:rgba(255,255,255,.08);border-radius:5px;overflow:hidden">
+            <div style="width:${(checkCount / 3 * 100)}%;height:100%;background:linear-gradient(90deg,var(--neon),var(--acc));transition:width .6s ease"></div>
+          </div>
+          <small style="color:var(--acc);font-weight:700">${3 - checkCount} more distinct bill check(s) needed</small>
+        </div>
+        <div class="acts" style="display:flex;justify-content:flex-end">
+          <button id="v-ok" type="button">Understood</button>
+        </div>`;
+    } else {
+      dlg.innerHTML = `
+        <div class="chead">
+          <b>🎁 My Rewards &amp; Voucher Vault</b>
+          <button id="v-cls" type="button" class="ghost" style="border:0!important;font-size:1.4rem;padding:0 .4rem;cursor:pointer">&times;</button>
+        </div>
+        <div style="padding:.9rem 0">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.85rem">
+            <span style="font-size:.88rem;color:var(--mut)">Permanent archival of earned vouchers:</span>
+            <span style="font-size:.76rem;background:rgba(62,201,174,.15);color:var(--acc);padding:.18rem .55rem;border-radius:10px;font-weight:700">3+ Bills Audited</span>
+          </div>
+          <div style="max-height:260px;overflow-y:auto;padding-right:.3rem">
+            ${localVault.length ? localVault.map(v => `
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:.65rem .85rem;background:var(--card);border-radius:var(--r-i);border:1px solid var(--glass-line);margin-bottom:.55rem">
+                <div>
+                  <b style="font-size:.88rem;color:var(--ink)">${esc(v.label)}</b><br>
+                  <small style="color:var(--mut);font-size:.75rem">${esc(v.tier || 'Reward')} · ${esc(v.date || 'Recent')}</small>
+                </div>
+                <div style="display:flex;align-items:center;gap:.45rem">
+                  <span style="font-family:monospace;font-size:.84rem;font-weight:700;color:var(--acc);background:var(--field);padding:.2rem .5rem;border-radius:5px;border:1px dashed var(--glass-line)">${esc(v.code)}</span>
+                  <button type="button" class="ghost cp-v-btn" data-code="${esc(v.code)}" style="padding:.25rem .55rem;font-size:.75rem">Copy</button>
+                </div>
+              </div>
+            `).join('') : '<p style="color:var(--mut);font-size:.85rem">No vouchers earned yet. Save energy or improve on your next bill check to unlock scratch cards!</p>'}
+          </div>
+          <div style="margin-top:.8rem;padding-top:.5rem;border-top:1px solid var(--glass-line);font-size:.74rem;color:var(--mut);line-height:1.45">
+            <i>Notice: WattBack is an independent citizen engagement project built for HackCult '26. We are not yet partnered with any company; all vouchers are demonstrative.</i>
+          </div>
+        </div>
+        <div class="acts" style="display:flex;justify-content:flex-end">
+          <button id="v-ok" type="button">Close</button>
+        </div>`;
+    }
+
+    if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
+    const closeVault = () => dlg.close ? dlg.close() : dlg.removeAttribute('open');
+    document.getElementById('v-cls').onclick = closeVault;
+    document.getElementById('v-ok').onclick = closeVault;
+    dlg.querySelectorAll('.cp-v-btn').forEach(btn => {
+      btn.onclick = () => {
+        const code = btn.getAttribute('data-code');
+        if (navigator.clipboard) navigator.clipboard.writeText(code);
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = 'Copy', 2000);
+      };
+    });
+  }
+
+  const vBtn = $('#mn-vault-btn');
+  if (vBtn) vBtn.onclick = () => { setDrawerOpen(false); openVaultModal(); };
 
   mn.addEventListener('click', e => {
     if(e.target.closest && (e.target.closest('a') || e.target.closest('#hlp-tab') || e.target.closest('#cz'))){

@@ -65,7 +65,7 @@ def limited(request, key, n, secs=3600):
 STATIC = Path(__file__).parent.parent / "static"
 
 class Req(BaseModel):
-    bill_amount: float | None = Field(default=None, gt=0, le=200000)
+    bill_amount: float | None = None
     consumer_id: str | None = Field(default=None, pattern=r"^\d{10}$")
     pin: str = Field(pattern=r"^\d{6}$")
     household_size: int = Field(default=3, ge=1, le=15)
@@ -78,6 +78,7 @@ class Req(BaseModel):
     lang: str = Field(default="en", pattern="^(en|hi|gu)$")
     prev_kwh: float | None = None
     prev_score: float | None = None
+    prev_bill: float | None = None
 
 @app.post("/analyze")
 def run(r: Req, request: Request):
@@ -89,21 +90,25 @@ def run(r: Req, request: Request):
         except BillNotFound as e:
             raise HTTPException(422, str(e))
         amount, months, verified = b["amount"], b["months"], True
-    if not amount:
-        raise HTTPException(422, "Enter a bill amount or a 10-digit Consumer ID")
+    if amount is None or amount <= 0:
+        raise HTTPException(422, "Please enter a valid bill amount greater than ₹0, or a 10-digit Consumer ID.")
+    if amount > 200000:
+        raise HTTPException(422, f"Maximum bill limit exceeded (₹{amount:,.0f}). WattBack analyzes residential and retail utility bills up to ₹2,00,000. Industrial/HT high-voltage lines require dedicated substation schedules.")
+
     # Auto-detect previous check if signed in and not passed by client
-    prev_kwh, prev_score = r.prev_kwh, r.prev_score
+    prev_kwh, prev_score, prev_bill = r.prev_kwh, r.prev_score, r.prev_bill
     sub = request.session.get("sub")
-    if prev_kwh is None and sub:
+    if sub and (prev_kwh is None or prev_bill is None):
         prev_items = db.history(sub, 2)
         if prev_items:
-            prev_kwh = prev_items[-1].get("kwh")
-            prev_score = prev_items[-1].get("score")
+            if prev_kwh is None: prev_kwh = prev_items[-1].get("kwh")
+            if prev_score is None: prev_score = prev_items[-1].get("score")
+            if prev_bill is None: prev_bill = prev_items[-1].get("bill")
 
     try:
         out = analyze(amount, r.pin, r.household_size, months, r.renter, r.lang, verified,
                       r.state, r.custom, (r.lat, r.lon) if r.lat and r.lon else None,
-                      prev_kwh=prev_kwh, prev_score=prev_score)
+                      prev_kwh=prev_kwh, prev_score=prev_score, prev_bill=prev_bill)
     except (TariffNotLoaded, ValueError) as e:
         raise HTTPException(422, str(e))
     out["bill_source"] = "verified" if verified else "typed"

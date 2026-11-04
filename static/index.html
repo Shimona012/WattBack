@@ -32,7 +32,7 @@ h2{font-size:1.1rem;margin:1.25rem 0 .25rem}
 .prize .pz-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.84rem;font-weight:700;background:var(--field);padding:.2rem .55rem;border-radius:6px;border:1px dashed var(--glass-line);color:var(--ink)}
 #cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;transition:opacity .4s ease;z-index:2;cursor:crosshair}
 .warn{color:var(--warn);font-weight:600}.good{color:var(--acc);font-weight:600}
-</style><meta name="color-scheme" content="light dark"><script>try{var d=document.documentElement,g=function(k,f){try{return localStorage.getItem(k)||f}catch(e){return f}},t=g("wb_theme","auto");if(t!=="auto")d.dataset.theme=t;d.dataset.lights=g("wb_lights","on");d.dataset.size=g("wb_size","md");d.dataset.glass=g("wb_glass","on")}catch(e){}</script><link rel="stylesheet" href="/static/site.css?v=12"></head><body class="home"><main>
+</style><meta name="color-scheme" content="light dark"><script>try{var d=document.documentElement,g=function(k,f){try{return localStorage.getItem(k)||f}catch(e){return f}},t=g("wb_theme","auto");if(t!=="auto")d.dataset.theme=t;d.dataset.lights=g("wb_lights","on");d.dataset.size=g("wb_size","md");d.dataset.glass=g("wb_glass","on")}catch(e){}</script><link rel="stylesheet" href="/static/site.css?v=13"></head><body class="home"><main>
 <header><h1 class="mark">WattBack</h1><p class="tag">The light of an idea</p></header>
 <p class="sub">Enter your bill amount. We work out the units, the slab trap, and how you compare for a home your size. <button type="button" class="lnk open-help" style="display:inline-flex;align-items:center;gap:.25rem;font-size:.86rem;color:var(--acc);vertical-align:baseline;padding:0 .25rem;background:none;border:0;cursor:pointer;font-weight:600">Need help?</button></p>
 <form id="f">
@@ -89,19 +89,51 @@ $('#loc').onclick=()=>{
 $('#f').onsubmit=async e=>{
   e.preventDefault();
   const d=new FormData(e.target);
+  const billVal=+d.get('bill');
+  if(!billVal || billVal <= 0){
+    $('#out').innerHTML='<div class="sc-card" style="border-left:4px solid var(--warn)!important"><b style="color:var(--warn)">⚠️ Please enter a bill amount greater than ₹0.</b></div>';
+    return;
+  }
+  if(billVal > 200000){
+    $('#out').innerHTML=`<div class="sc-card" style="border-left:4px solid var(--warn)!important">
+      <h3 style="margin:0 0 .4rem;color:var(--warn);display:flex;align-items:center;gap:.4rem">
+        <span>⚠️</span> <span>Maximum Bill Limit Exceeded (₹${billVal.toLocaleString('en-IN')})</span>
+      </h3>
+      <p style="margin:0 0 .5rem;color:var(--ink);font-size:.9rem;line-height:1.5">
+        WattBack is tailored for residential and retail household bills up to <b>₹2,00,000</b>. For heavy commercial, industrial, or high-tension grid connections, please consult your DISCOM's institutional tariff schedule.
+      </p>
+      <small style="color:var(--mut)">Check that you haven't typed extra zeros by mistake.</small>
+    </div>`;
+    $('#out').scrollIntoView({behavior:'smooth',block:'start'});
+    return;
+  }
+  $('#out').innerHTML='<div style="padding:1.5rem;text-align:center;color:var(--mut)">Calculating tariff inversion and loading degree-days...</div>';
   let custom=null;try{custom=customRates()}catch(err){$('#out').textContent=err.message;return}
   const prevKwh = parseFloat(localStorage.getItem('wb_last_kwh') || '');
   const prevScore = parseFloat(localStorage.getItem('wb_last_score') || '');
+  const prevBill = parseFloat(localStorage.getItem('wb_last_bill') || '');
   const res=await fetch('/analyze',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({state:d.get('state')||null,custom,lat:window.COORDS?window.COORDS[0]:null,lon:window.COORDS?window.COORDS[1]:null,bill_amount:+d.get('bill')||null,consumer_id:d.get('cid')||null,pin:d.get('pin'),household_size:+d.get('n'),billing_months:+d.get('days'),renter:d.get('renter')==='on',lang:d.get('lang'),prev_kwh:!isNaN(prevKwh)?prevKwh:null,prev_score:!isNaN(prevScore)?prevScore:null})});
+    body:JSON.stringify({state:d.get('state')||null,custom,lat:window.COORDS?window.COORDS[0]:null,lon:window.COORDS?window.COORDS[1]:null,bill_amount:billVal,consumer_id:d.get('cid')||null,pin:d.get('pin'),household_size:+d.get('n'),billing_months:+d.get('days'),renter:d.get('renter')==='on',lang:d.get('lang'),prev_kwh:!isNaN(prevKwh)?prevKwh:null,prev_score:!isNaN(prevScore)?prevScore:null,prev_bill:!isNaN(prevBill)?prevBill:null})});
   window.CID=d.get('cid')||null;
-  if(!res.ok){const j=await res.json().catch(()=>({}));$('#out').textContent=typeof j.detail==='string'?j.detail:'Check your inputs: bill above 0, 6-digit PIN, 1 to 15 people.';return}
+  if(!res.ok){
+    const j=await res.json().catch(()=>({}));
+    let errMsg = 'Check your inputs: bill above 0, 6-digit PIN, 1 to 15 people.';
+    if(typeof j.detail==='string') errMsg = j.detail;
+    else if(Array.isArray(j.detail) && j.detail[0] && j.detail[0].msg) errMsg = j.detail[0].msg;
+    $('#out').innerHTML=`<div class="sc-card" style="border-left:4px solid var(--warn)!important"><b style="color:var(--warn)">⚠️ ${esc(errMsg)}</b></div>`;
+    return;
+  }
   const r=await res.json(),s=r.split_kwh,t=r.kwh,f=r.fairness,sl=r.slab;
+  localStorage.setItem('wb_last_bill', r.bill_rs);
   localStorage.setItem('wb_last_kwh', r.kwh);
   if(r.fairness && r.fairness.score) localStorage.setItem('wb_last_score', r.fairness.score);
-  let checkCount = Number(localStorage.getItem('wb_check_count') || '0') + 1;
-  localStorage.setItem('wb_check_count', checkCount);
-  if(r.reward && r.reward.code){
+  let checkCount = Number(localStorage.getItem('wb_check_count') || '0');
+  if(!r.is_duplicate){
+    checkCount += 1;
+    localStorage.setItem('wb_check_count', checkCount);
+  }
+  if(window.updateVaultBtn) window.updateVaultBtn();
+  if(r.reward && r.reward.code && !r.is_duplicate){
     let vault = JSON.parse(localStorage.getItem('wb_rewards_vault') || '[]');
     vault.unshift({
       code: r.reward.code,
@@ -124,6 +156,8 @@ $('#f').onsubmit=async e=>{
   const cliffPct=sl.cliff_kwh?Math.min(100, (sl.cliff_kwh/maxCliff*100)).toFixed(1):null;
 
   $('#out').innerHTML=`
+   ${r.warnings && r.warnings.length ? r.warnings.map(w=>`<div class="sc-card" style="margin:.8rem 0;padding:.75rem 1rem;background:rgba(255,138,92,.12);border:1px solid rgba(255,138,92,.35);border-radius:var(--r-i);font-size:.84rem;color:var(--ink);display:flex;align-items:flex-start;gap:.5rem"><span style="font-size:1.1rem;line-height:1">⚠️</span><div><b>Notice:</b> ${esc(w)}</div></div>`).join('') : ''}
+   ${r.is_duplicate ? `<div class="sc-card" style="margin:.8rem 0;padding:.75rem 1rem;background:rgba(62,201,174,.12);border:1px solid rgba(62,201,174,.3);border-radius:var(--r-i);font-size:.84rem;color:var(--ink);display:flex;align-items:center;gap:.5rem"><span>ℹ️</span><div><b>Duplicate Bill Checked:</b> You entered the same bill amount (₹${r.bill_rs.toLocaleString('en-IN')}) as your last check. Duplicate bills do not advance milestone or grant duplicate rewards.</div></div>` : ''}
    ${r.confidence==='estimate'?`<p class="warn">We don't hold verified rates for ${esc(r.tariff.state)}, so this is an estimate: between ${r.kwh_range[0]} and ${r.kwh_range[1]} units. Open "use my own rates" and enter the slabs from your bill, or from the ${esc(r.tariff.regulator)} tariff order, for an exact result.</p>`:''}
    <div><div class="big">${r.kwh} units</div><div style="color:var(--mut)">${r.kwh_per_person} per person · ${r.co2_kg} kg CO₂ this month</div></div>
 
@@ -520,4 +554,4 @@ function scratch(){
   };
   c.onpointercancel=()=>{down=false};
 }
-</script></main><script src="/static/site.js?v=12"></script></body></html>
+</script></main><script src="/static/site.js?v=13"></script></body></html>
