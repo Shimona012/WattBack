@@ -1,0 +1,8 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Contact us - WattBack</title>
+<style>body{margin:0;background:var(--bg,#f1f5f7);display:grid;place-items:start center;padding:2rem 1rem;min-height:100vh}</style><meta name="color-scheme" content="light dark"><script>try{var d=document.documentElement,g=function(k,f){try{return localStorage.getItem(k)||f}catch(e){return f}},t=g("wb_theme","auto");if(t!=="auto")d.dataset.theme=t;d.dataset.lights=g("wb_lights","on");d.dataset.size=g("wb_size","md");d.dataset.glass=g("wb_glass","on")}catch(e){}</script><link rel="stylesheet" href="/static/site.css"></head>
+<body><main class="page"><h1>Contact us</h1><p>Questions, corrections to a tariff, or feedback? Send a note and we will read it.</p>
+<form id="cf"><label>Name<input name="name" required maxlength="80"></label><label>Email<input name="email" type="email" required maxlength="120"></label>
+<label>Message<textarea name="message" rows="5" required minlength="5" maxlength="2000"></textarea></label><button>Send</button> <span id="cs" role="status"></span></form>
+<script>document.getElementById('cf').onsubmit=async e=>{e.preventDefault();const d=Object.fromEntries(new FormData(e.target));
+const r=await fetch('/contact',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
+document.getElementById('cs').textContent=r.ok?'Thanks, we got it.':(r.status===429?'Too many messages, try later.':'Please check your details.');if(r.ok)e.target.reset()}</script></main><script src="/static/site.js"></script></body></html>

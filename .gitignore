@@ -1,0 +1,4 @@
+.env
+data/submissions.jsonl
+data/tariffs_cache.json
+__pycache__/

@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+pydantic
+adaption
+google-auth
+requests
+itsdangerous
