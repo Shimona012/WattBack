@@ -45,7 +45,7 @@ def analyze(bill: float, pin: str, members: int, months: int = 1, renter: bool =
         "split_kwh": {"base": round(base - standby, 1), "cooling": round(cooling, 1), "standby": round(standby, 1)},
         "fairness": {"expected_kwh": round(exp, 1), "score": score,
                      "beats_baseline": bool(score and score < 1.0)},
-        "reward": None if est else reward(score, pin, kwh, verified),
+        "reward": reward(score, pin, kwh, verified),
         "confidence": "estimate" if est else ("custom" if origin == "custom" else "regulator"), "kwh_range": rng,
         "offer": solar_or_kit(kwh, mbill, renter),
         "nudge": polish(nudge(slab, lang, est), lang), "lang": lang, "verified": verified,

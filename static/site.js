@@ -12,7 +12,7 @@ function applyPrefs(){const g=(k,f)=>S.get(k)||f,t=g('wb_theme','auto');
   if(t==='auto')delete R.dataset.theme;else R.dataset.theme=t;
   R.dataset.lights=g('wb_lights','on');R.dataset.size=g('wb_size','md');R.dataset.glass=g('wb_glass','on')}
 safe('prefs',applyPrefs);
-if(!document.querySelector('link[href*="/static/site.css"]')){const L=document.createElement('link');L.rel='stylesheet';L.href='/static/site.css?v=10';document.head.appendChild(L)}
+if(!document.querySelector('link[href*="/static/site.css"]')){const L=document.createElement('link');L.rel='stylesheet';L.href='/static/site.css?v=11';document.head.appendChild(L)}
 
 // ---------- navigation & slide-over drawer on LEFT ----------
 let nav, mn, bd, setDrawerOpen;

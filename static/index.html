@@ -24,11 +24,15 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--acc);outline-of
 .bar{display:flex;height:14px;border-radius:7px;overflow:hidden;background:var(--line)}
 .bar i{display:block}
 h2{font-size:1.1rem;margin:1.25rem 0 .25rem}
-.sc{position:relative;width:320px;max-width:100%;height:110px;border-radius:10px;overflow:hidden;background:var(--card);border:1px solid var(--line)}
-.prize{position:absolute;inset:0;display:grid;place-items:center;font-weight:700;font-size:1.3rem;color:var(--acc)}
-#cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;transition:opacity .4s}
+.sc-card{margin:1.4rem 0 .8rem;padding:1.15rem 1.25rem;background:var(--glass);border:1px solid var(--glass-line);border-radius:var(--r);box-shadow:inset 0 1px 0 var(--glass-line),0 0 0 1px var(--edge),var(--shadow);backdrop-filter:blur(18px) saturate(1.5);-webkit-backdrop-filter:blur(18px) saturate(1.5)}
+.sc{position:relative;width:100%;max-width:340px;height:135px;border-radius:var(--r-s);overflow:hidden;background:var(--card);border:1px solid var(--glass-line);box-shadow:inset 0 1px 2px rgba(0,0,0,.15);touch-action:none;user-select:none;-webkit-user-select:none;margin:.75rem 0}
+.prize{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:.85rem;text-align:center;gap:.25rem;background:linear-gradient(135deg,rgba(11,122,104,.14),rgba(62,201,174,.07));z-index:1}
+.prize .pz-tier{font-size:.74rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--acc)}
+.prize .pz-label{font-size:1.3rem;font-weight:800;color:var(--ink);line-height:1.2}
+.prize .pz-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.84rem;font-weight:700;background:var(--field);padding:.2rem .55rem;border-radius:6px;border:1px dashed var(--glass-line);color:var(--ink)}
+#cv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;transition:opacity .4s ease;z-index:2;cursor:crosshair}
 .warn{color:var(--warn);font-weight:600}.good{color:var(--acc);font-weight:600}
-</style><meta name="color-scheme" content="light dark"><script>try{var d=document.documentElement,g=function(k,f){try{return localStorage.getItem(k)||f}catch(e){return f}},t=g("wb_theme","auto");if(t!=="auto")d.dataset.theme=t;d.dataset.lights=g("wb_lights","on");d.dataset.size=g("wb_size","md");d.dataset.glass=g("wb_glass","on")}catch(e){}</script><link rel="stylesheet" href="/static/site.css?v=10"></head><body class="home"><main>
+</style><meta name="color-scheme" content="light dark"><script>try{var d=document.documentElement,g=function(k,f){try{return localStorage.getItem(k)||f}catch(e){return f}},t=g("wb_theme","auto");if(t!=="auto")d.dataset.theme=t;d.dataset.lights=g("wb_lights","on");d.dataset.size=g("wb_size","md");d.dataset.glass=g("wb_glass","on")}catch(e){}</script><link rel="stylesheet" href="/static/site.css?v=11"></head><body class="home"><main>
 <header><h1 class="mark">WattBack</h1><p class="tag">The light of an idea</p></header>
 <p class="sub">Enter your bill amount. We work out the units, the slab trap, and how you compare for a home your size. <button type="button" class="lnk open-help" style="display:inline-flex;align-items:center;gap:.25rem;font-size:.86rem;color:var(--acc);vertical-align:baseline;padding:0 .25rem;background:none;border:0;cursor:pointer;font-weight:600">Need help?</button></p>
 <form id="f">
@@ -256,12 +260,35 @@ function showInstallerModal(r){
 }
 
 function extras(r){
-
   window.WB_CONTEXT=`State ${r.tariff.state}, rates ${r.tariff.source}/${r.confidence}. About ${r.kwh} units a month for ${r.members} people (${r.kwh_per_person} each). Score ${r.fairness.score}. Units over top slab: ${r.slab.units_over}.`;
   if(r.confidence==='estimate')['slabp','fairp'].forEach(i=>setTimeout(()=>{const e=document.getElementById(i);e&&e.remove()}));
   const o=r.offer,x=$('#extras');
-  const card=r.reward?`<h2>Your scratch card</h2><div class="sc"><div class="prize">${esc(r.reward.label)}</div><canvas id="cv" width="320" height="110" aria-label="Scratch to reveal"></canvas></div>${r.reward.preview_only?'<small>Preview mode: add a Consumer ID to unlock real rewards.</small>':'<p class="good">Verified bill.</p><button type="button" id="claim">Claim reward</button>'}`
-    :`<h2>No card this month</h2><p>Your use is above expected for ${r.members} people. Try the tip below and check next bill.</p>`;
+  const card=r.reward?`
+  <div class="sc-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.45rem">
+      <h2 style="margin:0;font-size:1.15rem;display:flex;align-items:center;gap:.45rem;color:var(--ink)">
+        <span>🎁</span> <span>Your Scratch Card</span>
+      </h2>
+      <span style="font-size:.78rem;padding:.2rem .6rem;border-radius:12px;background:rgba(62,201,174,.15);color:var(--acc);font-weight:700;border:1px solid rgba(62,201,174,.3)">${esc(r.reward.tier || 'Reward')}</span>
+    </div>
+    <p style="margin:0 0 .75rem;font-size:.88rem;color:var(--mut)">Scratch the metallic foil below with your mouse or finger to reveal your reward!</p>
+    <div class="sc">
+      <div class="prize">
+        <div class="pz-tier">🎉 ${esc(r.reward.tier || 'ENERGY REWARD')}</div>
+        <div class="pz-label">${esc(r.reward.label)}</div>
+        <div class="pz-code">Code: <b>${esc(r.reward.code || 'WB-ENERGY26')}</b></div>
+        <small style="color:var(--mut);font-size:.76rem;margin-top:.15rem">${r.reward.preview_only ? 'Demo preview · Add Consumer ID to unlock live utility redemption' : 'Verified bill reward ready to claim!'}</small>
+      </div>
+      <canvas id="cv" width="340" height="135" aria-label="Scratch to reveal"></canvas>
+    </div>
+    <div style="margin-top:.65rem;display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap">
+      ${r.reward.preview_only
+        ? `<small style="color:var(--mut);flex:1">Preview mode: enter your 10-digit Consumer ID above to unlock real utility credits.</small>`
+        : `<p class="good" style="margin:0;flex:1">Verified bill credit unlocked!</p><button type="button" id="claim" style="padding:.5rem 1.2rem">Claim reward</button>`
+      }
+      <button type="button" id="copy-reward-btn" class="ghost" style="display:none;padding:.4rem .85rem;font-size:.82rem;font-weight:600">Copy Voucher</button>
+    </div>
+  </div>` : '';
   const offer=o.type==='solar'?`<h2>Rooftop solar for you</h2>
     <div class="row"><span>Size</span><b>${o.kw} kW (${o.roof_sqft} sq ft roof)</b></div>
     <div class="row"><span>Cost before subsidy</span><b>₹${o.gross.toLocaleString('en-IN')}</b></div>
@@ -275,16 +302,95 @@ function extras(r){
     if(!speechSynthesis.getVoices().some(v=>v.lang.startsWith(r.lang)))alert('No '+r.lang+' voice on this device. Try Chrome on Android or install a voice.');speechSynthesis.speak(u)};
   const lead=$('#lead');if(lead)lead.onclick=()=>showInstallerModal(r);
   if(r.reward)scratch();
+  const cp=$('#copy-reward-btn');
+  if(cp && r.reward){
+    cp.onclick=()=>{
+      if(navigator.clipboard){navigator.clipboard.writeText(r.reward.code||'WB-ENERGY26')};
+      cp.textContent='Copied!';
+      setTimeout(()=>cp.textContent='Copy Voucher',2000);
+    };
+  }
   const cl=$('#claim');if(cl)cl.onclick=async()=>{const q=await fetch('/claim',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({consumer_id:window.CID})});
     cl.textContent=q.ok?'Claimed':'Already claimed this month';cl.disabled=true};
   fetch('/leaderboard?score='+r.fairness.score).then(a=>a.json()).then(L=>{
     $('#lb').innerHTML=L.map((e,i)=>`<div class="row"><span>${i+1}. ${esc(e.name)}</span><b class="${e.you?'good':''}">${e.score}</b></div>`).join('')+'<small>Score is use divided by what is expected for your household size and weather. Lower is better.</small>'});
 }
 function scratch(){
-  const c=$('#cv'),g=c.getContext('2d');let down=false,n=0;
-  g.fillStyle='#8aa0ae';g.fillRect(0,0,c.width,c.height);g.fillStyle='#fff';g.font='600 18px system-ui';g.fillText('Scratch here',110,62);
-  const at=e=>{const b=c.getBoundingClientRect(),k=c.width/b.width;g.globalCompositeOperation='destination-out';g.beginPath();
-    g.arc((e.clientX-b.left)*k,(e.clientY-b.top)*k,18,0,7);g.fill();if(++n>60)c.style.opacity=0};
-  c.onpointerdown=e=>{down=true;c.setPointerCapture(e.pointerId);at(e)};c.onpointermove=e=>down&&at(e);c.onpointerup=()=>down=false;
+  const c=$('#cv');
+  if(!c) return;
+  const g=c.getContext('2d');
+  let down=false,scratchedCount=0;
+  const w=c.width,h=c.height;
+
+  // Rich holographic emerald-cyan gradient
+  const grad=g.createLinearGradient(0,0,w,h);
+  grad.addColorStop(0,'#103330');
+  grad.addColorStop(0.25,'#194f4a');
+  grad.addColorStop(0.5,'#256d66');
+  grad.addColorStop(0.75,'#1a4e49');
+  grad.addColorStop(1,'#0c2624');
+  g.fillStyle=grad;
+  g.fillRect(0,0,w,h);
+
+  // Sparkle stars
+  g.fillStyle='rgba(255,255,255,0.35)';
+  for(let i=0;i<40;i++){
+    const sx=(i*47)%(w-10)+5;
+    const sy=(i*29)%(h-10)+5;
+    g.beginPath();
+    g.arc(sx,sy,(i%3)+1,0,Math.PI*2);
+    g.fill();
+  }
+
+  // Border highlight
+  g.strokeStyle='rgba(62,201,174,0.45)';
+  g.lineWidth=3;
+  g.strokeRect(3,3,w-6,h-6);
+
+  // Text
+  g.fillStyle='#ffffff';
+  g.font='bold 16px system-ui,-apple-system,sans-serif';
+  g.textAlign='center';
+  g.textBaseline='middle';
+  g.shadowColor='rgba(0,0,0,0.8)';
+  g.shadowBlur=6;
+  g.fillText('✨ SCRATCH TO REVEAL ✨',w/2,h/2-10);
+
+  g.fillStyle='#a7eee3';
+  g.font='12px system-ui,-apple-system,sans-serif';
+  g.fillText('Swipe or drag with mouse / finger',w/2,h/2+14);
+  g.shadowBlur=0;
+
+  const at=e=>{
+    const b=c.getBoundingClientRect();
+    if(!b.width||!b.height) return;
+    const kx=c.width/b.width;
+    const ky=c.height/b.height;
+    g.globalCompositeOperation='destination-out';
+    g.beginPath();
+    g.arc((e.clientX-b.left)*kx,(e.clientY-b.top)*ky,24,0,Math.PI*2);
+    g.fill();
+
+    scratchedCount++;
+    if(scratchedCount>30){
+      c.style.transition='opacity .5s ease';
+      c.style.opacity='0';
+      c.style.pointerEvents='none';
+      const cpBtn=document.getElementById('copy-reward-btn');
+      if(cpBtn) cpBtn.style.display='inline-flex';
+    }
+  };
+
+  c.onpointerdown=e=>{
+    down=true;
+    try{c.setPointerCapture(e.pointerId)}catch(_){}
+    at(e);
+  };
+  c.onpointermove=e=>{if(down)at(e)};
+  c.onpointerup=e=>{
+    down=false;
+    try{c.releasePointerCapture(e.pointerId)}catch(_){}
+  };
+  c.onpointercancel=()=>{down=false};
 }
-</script></main><script src="/static/site.js?v=10"></script></body></html>
+</script></main><script src="/static/site.js?v=11"></script></body></html>

@@ -20,12 +20,28 @@ def solar_or_kit(monthly_kwh: float, monthly_bill: float, renter: bool) -> dict:
             "vendors": ["Vendor A (placeholder)", "Vendor B (placeholder)", "Vendor C (placeholder)"]}
 
 def reward(score, pin: str, kwh: float, verified: bool = False):
-    """Scratch-card prize. Only households beating their size-adjusted baseline get one."""
-    if score is None or score >= 1.0:
-        return None
-    pool = ["₹100 off a BLDC fan", "₹50 bill cashback"] if score < 0.8 else ["₹50 bill cashback", "LED bulb voucher"]
+    """Scratch-card prize for citizen energy engagement (Mission LiFE / GEDA).
+    Households beating their baseline earn higher cashbacks/fan rebates;
+    others earn eco-action vouchers and energy-saving coupons to encourage reduction."""
+    if score is not None and score < 0.8:
+        pool = ["₹100 off a BLDC fan", "₹50 bill cashback", "₹150 Solar Inverter Voucher", "Free 7W LED Kit"]
+        tier = "Super Saver"
+    elif score is not None and score < 1.0:
+        pool = ["₹50 bill cashback", "LED bulb voucher", "₹75 Smart Power Plug", "₹100 Heat Pump Rebate"]
+        tier = "Efficient Home"
+    else:
+        pool = ["₹50 off a BLDC fan", "₹50 Energy Saver Voucher", "Free LED Bulb Voucher", "₹100 Solar Assessment Rebate"]
+        tier = "Mission LiFE Saver"
+
     h = int(hashlib.sha256(f"{pin}{kwh}".encode()).hexdigest(), 16)   # deterministic: no re-rolling
-    return {"label": pool[h % len(pool)], "preview_only": not verified}
+    code = f"WB-{h % 90000 + 10000}"
+    return {
+        "label": pool[h % len(pool)],
+        "tier": tier,
+        "code": code,
+        "preview_only": not verified,
+        "unlocked": bool(score and score < 1.0)
+    }
 
 NUDGE = {   # have a native speaker review hi/gu before the demo
  "over": {"en": "You went {over} units past the {cliff}-unit slab and paid about ₹{pen} extra. Run the AC at 24 degrees with the fan on to stay under it.",
